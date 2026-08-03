@@ -158,17 +158,17 @@ lifecycleScope.launch {
 ## Step 6: Add camera streaming
 
 ```kotlin
-import com.meta.wearable.dat.camera.addStream
+import com.meta.wearable.dat.camera.addCamera
 import com.meta.wearable.dat.camera.types.StreamConfiguration
 import com.meta.wearable.dat.camera.types.VideoQuality
 
-val stream = session.addStream(
+val camera = session.addCamera(
     StreamConfiguration(videoQuality = VideoQuality.MEDIUM, frameRate = 24),
 ).getOrElse { error ->
     throw IllegalStateException(error.description)
 }
 
-stream.start().onFailure { error, _ ->
+camera.stream.start().onFailure { error, _ ->
     throw IllegalStateException(error.description)
 }
 ```
@@ -179,4 +179,4 @@ stream.start().onFailure { error, _ ->
 - [MockDevice Testing](mockdevice-testing.md) — Test without hardware
 - [Session Lifecycle](session-lifecycle.md) — Handle session and stream state changes
 - [Permissions](permissions-registration.md) — Registration and permission flows
-- [Full Android API reference](https://wearables.developer.meta.com/docs/reference/android/dat/0.8)
+- [Full Android API reference](https://wearables.developer.meta.com/docs/reference/android/dat/latest)

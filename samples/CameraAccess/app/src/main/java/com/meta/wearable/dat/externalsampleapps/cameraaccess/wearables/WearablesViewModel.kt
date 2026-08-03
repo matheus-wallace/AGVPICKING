@@ -25,9 +25,7 @@ import com.meta.wearable.dat.core.selectors.AutoDeviceSelector
 import com.meta.wearable.dat.core.selectors.DeviceSelector
 import com.meta.wearable.dat.core.types.DeviceCompatibility
 import com.meta.wearable.dat.core.types.DeviceIdentifier
-import com.meta.wearable.dat.core.types.Permission
-import com.meta.wearable.dat.core.types.PermissionStatus
-import com.meta.wearable.dat.core.types.RegistrationState
+import com.meta.wearable.dat.externalsampleapps.cameraaccess.R
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -36,7 +34,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-class WearablesViewModel(application: Application) : AndroidViewModel(application) {
+class WearablesViewModel(private val application: Application) : AndroidViewModel(application) {
   private val _uiState = MutableStateFlow(WearablesUiState())
   val uiState: StateFlow<WearablesUiState> = _uiState.asStateFlow()
 
@@ -45,6 +43,7 @@ class WearablesViewModel(application: Application) : AndroidViewModel(applicatio
   private var deviceSelectorJob: Job? = null
 
   private var monitoringStarted = false
+  private var recentErrorId = 0L
   private val deviceMonitoringJobs = mutableMapOf<DeviceIdentifier, Job>()
   private val deviceCompatibility = mutableMapOf<DeviceIdentifier, DeviceCompatibility>()
 
@@ -64,12 +63,7 @@ class WearablesViewModel(application: Application) : AndroidViewModel(applicatio
     // This allows the app to react to registration changes (registered, unregistered, etc.)
     viewModelScope.launch {
       Wearables.registrationState.collect { value ->
-        val previousState = _uiState.value.registrationState
-        val showGettingStartedSheet =
-            value == RegistrationState.REGISTERED && previousState == RegistrationState.REGISTERING
-        _uiState.update {
-          it.copy(registrationState = value, isGettingStartedSheetVisible = showGettingStartedSheet)
-        }
+        _uiState.update { it.copy(registrationState = value) }
       }
     }
     // This automatically updates when devices are discovered, connected, or disconnected
@@ -101,7 +95,7 @@ class WearablesViewModel(application: Application) : AndroidViewModel(applicatio
           updateFirmwareUpdateRequired()
           if (metadata.compatibility == DeviceCompatibility.DEVICE_UPDATE_REQUIRED) {
             val deviceName = metadata.name.ifEmpty { deviceId }
-            setRecentError("Device '$deviceName' requires an update to work with this app")
+            setRecentError(application.getString(R.string.error_device_update_required, deviceName))
           }
         }
       }
@@ -123,46 +117,6 @@ class WearablesViewModel(application: Application) : AndroidViewModel(applicatio
     }
   }
 
-  fun openDATGlassesAppUpdate(activity: Activity) {
-    Wearables.openDATGlassesAppUpdate(activity).onFailure { error, _ ->
-      setRecentError(error.description)
-    }
-  }
-
-  fun navigateToStreaming(onRequestWearablesPermission: suspend (Permission) -> PermissionStatus) {
-    viewModelScope.launch {
-      val permission = Permission.CAMERA // Camera permission is required for streaming
-      val result = Wearables.checkPermissionStatus(permission)
-
-      // Handle the result
-      result.onFailure { error, _ ->
-        setRecentError("Permission check error: ${error.description}")
-        return@launch
-      }
-
-      val permissionStatus = result.getOrNull()
-      if (permissionStatus == PermissionStatus.Granted) {
-        _uiState.update { it.copy(isStreaming = true) }
-        return@launch
-      }
-
-      // Request permission
-      val requestedPermissionStatus = onRequestWearablesPermission(permission)
-      when (requestedPermissionStatus) {
-        PermissionStatus.Denied -> {
-          setRecentError("Permission denied")
-        }
-        PermissionStatus.Granted -> {
-          _uiState.update { it.copy(isStreaming = true) }
-        }
-      }
-    }
-  }
-
-  fun navigateToDeviceSelection() {
-    _uiState.update { it.copy(isStreaming = false) }
-  }
-
   fun showDebugMenu() {
     _uiState.update { it.copy(isDebugMenuVisible = true) }
   }
@@ -171,16 +125,15 @@ class WearablesViewModel(application: Application) : AndroidViewModel(applicatio
     _uiState.update { it.copy(isDebugMenuVisible = false) }
   }
 
-  fun clearRecentError() {
-    _uiState.update { it.copy(recentError = null) }
+  fun clearRecentError(errorId: Long) {
+    _uiState.update { state ->
+      if (state.recentError?.id == errorId) state.copy(recentError = null) else state
+    }
   }
 
   internal fun setRecentError(error: String) {
-    _uiState.update { it.copy(recentError = error) }
-  }
-
-  internal fun setDatAppUpdateRequired(required: Boolean) {
-    _uiState.update { it.copy(isDatAppUpdateRequired = required) }
+    recentErrorId += 1
+    _uiState.update { it.copy(recentError = RecentError(recentErrorId, error)) }
   }
 
   fun onPermissionsResult(permissionsResult: Map<String, Boolean>, onAllGranted: () -> Unit) {
@@ -190,18 +143,8 @@ class WearablesViewModel(application: Application) : AndroidViewModel(applicatio
       onAllGranted()
       startMonitoring()
     } else {
-      _uiState.update {
-        it.copy(recentError = "Allow All Permissions (Bluetooth, Bluetooth Connect, Internet)")
-      }
+      setRecentError(application.getString(R.string.error_permissions_required))
     }
-  }
-
-  fun showGettingStartedSheet() {
-    _uiState.update { it.copy(isGettingStartedSheetVisible = true) }
-  }
-
-  fun hideGettingStartedSheet() {
-    _uiState.update { it.copy(isGettingStartedSheetVisible = false) }
   }
 
   override fun onCleared() {

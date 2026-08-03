@@ -98,12 +98,14 @@ fun MockDeviceKitScreen(
               style = MaterialTheme.typography.headlineSmall,
               fontWeight = FontWeight.Bold,
           )
-          Text(
-              text = stringResource(R.string.devices_paired_count, uiState.pairedDevices.size),
-              style = MaterialTheme.typography.bodyMedium,
-              color = AppColor.Green,
-              textAlign = TextAlign.Center,
-          )
+          if (uiState.isEnabled) {
+            Text(
+                text = stringResource(R.string.devices_paired_count, uiState.pairedDevices.size),
+                style = MaterialTheme.typography.bodyMedium,
+                color = AppColor.Green,
+                textAlign = TextAlign.Center,
+            )
+          }
         }
         Text(
             text = stringResource(R.string.mock_device_kit_description),
@@ -320,6 +322,26 @@ private fun MockDeviceCard(
                   colors = SwitchDefaults.colors(checkedTrackColor = AppColor.Green),
               )
             }
+          }
+
+          // Capacitive touch gesture triggers (act on the active stream session)
+          Text(
+              text = stringResource(R.string.captouch_section_title),
+              style = MaterialTheme.typography.bodyMedium,
+              fontWeight = FontWeight.Medium,
+              color = MaterialTheme.colorScheme.onSurfaceVariant,
+          )
+          Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            ActionButton(
+                modifier = Modifier.weight(1f),
+                text = stringResource(R.string.captouch_tap),
+                onClick = { viewModel.tap(deviceInfo) },
+            )
+            ActionButton(
+                modifier = Modifier.weight(1f),
+                text = stringResource(R.string.captouch_tap_and_hold),
+                onClick = { viewModel.tapAndHold(deviceInfo) },
+            )
           }
 
           // Camera source dropdown

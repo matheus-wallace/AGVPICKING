@@ -19,14 +19,17 @@ package com.meta.wearable.dat.externalsampleapps.cameraaccess
 
 import android.Manifest.permission.BLUETOOTH
 import android.Manifest.permission.BLUETOOTH_CONNECT
-import android.Manifest.permission.CAMERA
 import android.Manifest.permission.INTERNET
+import android.Manifest.permission.RECORD_AUDIO
+import android.content.pm.PackageManager
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts.RequestMultiplePermissions
+import androidx.activity.result.contract.ActivityResultContracts.RequestPermission
 import androidx.activity.viewModels
+import androidx.core.content.ContextCompat
 import com.meta.wearable.dat.core.Wearables
 import com.meta.wearable.dat.core.types.Permission
 import com.meta.wearable.dat.core.types.PermissionStatus
@@ -41,7 +44,7 @@ import kotlinx.coroutines.sync.withLock
 class MainActivity : ComponentActivity() {
   companion object {
     // Required Android permissions for the DAT SDK to function properly
-    val PERMISSIONS: Array<String> = arrayOf(BLUETOOTH, BLUETOOTH_CONNECT, CAMERA, INTERNET)
+    val PERMISSIONS: Array<String> = arrayOf(BLUETOOTH, BLUETOOTH_CONNECT, INTERNET)
   }
 
   val viewModel: WearablesViewModel by viewModels()
@@ -77,6 +80,31 @@ class MainActivity : ComponentActivity() {
     }
   }
 
+  private var audioPermissionContinuation: CancellableContinuation<Boolean>? = null
+  // Phone microphone permission, requested in context when recording with sound-in-video on.
+  private val recordAudioPermissionLauncher =
+      registerForActivityResult(RequestPermission()) { granted ->
+        audioPermissionContinuation?.resume(granted)
+        audioPermissionContinuation = null
+      }
+
+  // Requests RECORD_AUDIO for sound-in-video. Returns true if granted (already or just now); false
+  // if denied, so recording can proceed video-only instead of being blocked.
+  suspend fun requestRecordAudioPermission(): Boolean {
+    if (
+        ContextCompat.checkSelfPermission(this, RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+    ) {
+      return true
+    }
+    return permissionMutex.withLock {
+      suspendCancellableCoroutine { continuation ->
+        audioPermissionContinuation = continuation
+        continuation.invokeOnCancellation { audioPermissionContinuation = null }
+        recordAudioPermissionLauncher.launch(RECORD_AUDIO)
+      }
+    }
+  }
+
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
     enableEdgeToEdge()
@@ -84,6 +112,7 @@ class MainActivity : ComponentActivity() {
       CameraAccessScaffold(
           viewModel = viewModel,
           onRequestWearablesPermission = ::requestWearablesPermission,
+          onRequestRecordAudioPermission = ::requestRecordAudioPermission,
       )
     }
   }

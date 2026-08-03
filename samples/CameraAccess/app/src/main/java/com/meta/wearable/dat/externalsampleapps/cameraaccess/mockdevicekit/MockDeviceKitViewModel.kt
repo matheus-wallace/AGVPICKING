@@ -18,6 +18,7 @@ import android.net.Uri
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.meta.wearable.dat.externalsampleapps.cameraaccess.R
 import com.meta.wearable.dat.mockdevice.MockDeviceKit
 import com.meta.wearable.dat.mockdevice.api.GlassesModel
 import com.meta.wearable.dat.mockdevice.api.MockGlasses
@@ -29,7 +30,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-class MockDeviceKitViewModel(application: Application) : AndroidViewModel(application) {
+class MockDeviceKitViewModel(private val application: Application) : AndroidViewModel(application) {
 
   companion object {
     private const val TAG = "MockDeviceKitViewModel"
@@ -58,13 +59,12 @@ class MockDeviceKitViewModel(application: Application) : AndroidViewModel(applic
           .pairGlasses(GlassesModel.RAYBAN_META)
           .fold(
               onSuccess = { mockDevice ->
-                val deviceName = "RayBan Meta Glasses"
-                val deviceInfo =
-                    MockDeviceInfo(
-                        device = mockDevice,
-                        deviceId = UUID.randomUUID().toString(),
-                        deviceName = deviceName,
-                    )
+                val deviceName = application.getString(R.string.mock_device_name)
+                val deviceInfo = MockDeviceInfo(
+                    device = mockDevice,
+                    deviceId = UUID.randomUUID().toString(),
+                    deviceName = deviceName,
+                )
                 _uiState.update { currentState ->
                   currentState.copy(pairedDevices = currentState.pairedDevices + deviceInfo)
                 }
@@ -137,6 +137,28 @@ class MockDeviceKitViewModel(application: Application) : AndroidViewModel(applic
     executeMockDeviceOperation(deviceInfo, "Unfolding", deviceInfo.copy(isUnfolded = true)) { device
       ->
       device.unfold()
+    }
+  }
+
+  // Simulate a single cap-touch tap, which pauses or resumes the active stream.
+  fun tap(deviceInfo: MockDeviceInfo) {
+    viewModelScope.launch {
+      try {
+        deviceInfo.device.services.captouch.tap()
+      } catch (e: Exception) {
+        Log.e(TAG, "Failed to tap on device: ${deviceInfo.deviceId}", e)
+      }
+    }
+  }
+
+  // Simulate a cap-touch tap and hold, which stops the active stream.
+  fun tapAndHold(deviceInfo: MockDeviceInfo) {
+    viewModelScope.launch {
+      try {
+        deviceInfo.device.services.captouch.tapAndHold()
+      } catch (e: Exception) {
+        Log.e(TAG, "Failed to tap and hold on device: ${deviceInfo.deviceId}", e)
+      }
     }
   }
 

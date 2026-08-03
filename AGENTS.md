@@ -34,10 +34,10 @@ val session = Wearables.createSession(AutoDeviceSelector()).getOrElse { error ->
 }
 session.start()
 
-val stream = session.addStream(StreamConfiguration()).getOrElse { error ->
+val camera = session.addCamera(StreamConfiguration()).getOrElse { error ->
     throw IllegalStateException(error.description)
 }
-stream.start().getOrElse { error ->
+camera.stream.start().getOrElse { error ->
     throw IllegalStateException(error.description)
 }
 ```
@@ -64,7 +64,7 @@ Avoid `getOrThrow()` in user-facing samples. Surface typed errors from `DatResul
 | Type | Purpose | Example |
 |------|---------|---------|
 | `Session` | Device connection lifecycle | `Wearables.createSession(...)` |
-| `Stream` | Camera capability on a session | `session.addStream(...)` |
+| `Stream` | Camera capability on a session | `session.addCamera(...)` → `camera.stream` |
 | `Display` | Display capability on a session | `session.addDisplay(...)` |
 | `*Selector` | Device targeting | `AutoDeviceSelector` |
 | `*Error` | Typed failure surface | `SessionError`, `StreamError` |
@@ -98,12 +98,12 @@ Use MockDeviceKit to drive registration, device availability, streaming media, a
 
 - Do not call SDK APIs before `Wearables.initialize(context)`
 - Do not assume a session implies streaming or display access; capabilities are attached separately
-- Do not ignore `DatResult` failures from `createSession`, `start`, `addStream`, `addDisplay`, or `capturePhoto`
+- Do not ignore `DatResult` failures from `createSession`, `start`, `addCamera`, `addDisplay`, or `capturePhoto`
 - Do not reuse terminally stopped sessions
 
 ## Links
 
-- [Android API reference](https://wearables.developer.meta.com/docs/reference/android/dat/0.8)
+- [Android API reference](https://wearables.developer.meta.com/docs/reference/android/dat/latest)
 - [Developer documentation](https://wearables.developer.meta.com/docs/develop/)
 - [GitHub repository](https://github.com/facebook/meta-wearables-dat-android)
 
@@ -153,7 +153,7 @@ In `libs.versions.toml`:
 
 ```toml
 [versions]
-mwdat = "0.8.0"
+mwdat = "0.9.0"
 
 [libraries]
 mwdat-core = { group = "com.meta.wearable", name = "mwdat-core", version.ref = "mwdat" }
@@ -262,17 +262,17 @@ lifecycleScope.launch {
 ## Step 6: Add camera streaming
 
 ```kotlin
-import com.meta.wearable.dat.camera.addStream
+import com.meta.wearable.dat.camera.addCamera
 import com.meta.wearable.dat.camera.types.StreamConfiguration
 import com.meta.wearable.dat.camera.types.VideoQuality
 
-val stream = session.addStream(
+val camera = session.addCamera(
     StreamConfiguration(videoQuality = VideoQuality.MEDIUM, frameRate = 24),
 ).getOrElse { error ->
     throw IllegalStateException(error.description)
 }
 
-stream.start().onFailure { error, _ ->
+camera.stream.start().onFailure { error, _ ->
     throw IllegalStateException(error.description)
 }
 ```
@@ -283,7 +283,7 @@ stream.start().onFailure { error, _ ->
 - [MockDevice Testing](mockdevice-testing.md) — Test without hardware
 - [Session Lifecycle](session-lifecycle.md) — Handle session and stream state changes
 - [Permissions](permissions-registration.md) — Registration and permission flows
-- [Full Android API reference](https://wearables.developer.meta.com/docs/reference/android/dat/0.8)
+- [Full Android API reference](https://wearables.developer.meta.com/docs/reference/android/dat/latest)
 
 ## Testing instructions
 
@@ -450,15 +450,15 @@ Use a `Session` and attached `Stream` to receive frames and capture photos.
 ## Key concepts
 
 - **Session**: Device connection lifecycle created through `Wearables.createSession(...)`
-- **Stream**: Camera capability attached to a session with `session.addStream(...)`
+- **Stream**: Camera stream accessed via `camera.stream` after attaching the camera with `session.addCamera(...)`
 - **StreamConfiguration**: Resolution and frame rate configuration for the stream
 - **PhotoData**: Still image captured from glasses while streaming
 
 ## Create a session and attach a stream
 
 ```kotlin
-import com.meta.wearable.dat.camera.Stream
-import com.meta.wearable.dat.camera.addStream
+import com.meta.wearable.dat.camera.Camera
+import com.meta.wearable.dat.camera.addCamera
 import com.meta.wearable.dat.camera.types.StreamConfiguration
 import com.meta.wearable.dat.camera.types.VideoQuality
 import com.meta.wearable.dat.core.Wearables
@@ -469,7 +469,7 @@ val session = Wearables.createSession(AutoDeviceSelector()).getOrElse { error ->
 }
 session.start()
 
-val stream: Stream = session.addStream(
+val camera: Camera = session.addCamera(
     StreamConfiguration(
         videoQuality = VideoQuality.MEDIUM,
         frameRate = 24,
@@ -478,7 +478,7 @@ val stream: Stream = session.addStream(
     throw IllegalStateException(error.description)
 }
 
-stream.start().getOrElse { error ->
+camera.stream.start().getOrElse { error ->
     throw IllegalStateException(error.description)
 }
 ```
@@ -503,7 +503,7 @@ Lower resolution and frame rate usually produce better visual quality per frame 
 
 ```kotlin
 lifecycleScope.launch {
-    stream.state.collect { state ->
+    camera.stream.state.collect { state ->
         when (state) {
             StreamState.STREAMING -> {
                 // Frames are flowing
@@ -524,7 +524,7 @@ lifecycleScope.launch {
 
 ```kotlin
 lifecycleScope.launch {
-    stream.videoStream.collect { frame ->
+    camera.stream.videoStream.collect { frame ->
         updatePreview(frame)
     }
 }
@@ -534,7 +534,7 @@ lifecycleScope.launch {
 
 ```kotlin
 lifecycleScope.launch {
-    stream.capturePhoto()
+    camera.stream.capturePhoto()
         .onSuccess { photoData ->
             val imageBytes = photoData.data
             savePhoto(imageBytes)
@@ -550,15 +550,15 @@ lifecycleScope.launch {
 Stop the stream when you no longer need camera data, then stop the parent session if the device interaction is finished.
 
 ```kotlin
-stream.stop()
+camera.stop()
 session.stop()
 ```
 
-If you want to remove the capability entirely before re-adding it, call `session.removeStream()`.
+If you want to remove the capability entirely before re-adding it, call `session.removeCamera()`.
 
 ## Links
 
-- [Android API reference](https://wearables.developer.meta.com/docs/reference/android/dat/0.8)
+- [Android API reference](https://wearables.developer.meta.com/docs/reference/android/dat/latest)
 - [Integration guide](https://wearables.developer.meta.com/docs/build-integration-android)
 
 ## Session management
@@ -608,7 +608,7 @@ STOPPED -> STARTING -> STARTED -> STREAMING -> STOPPING -> STOPPED -> CLOSED
 
 ```kotlin
 lifecycleScope.launch {
-    stream.state.collect { state ->
+    camera.stream.state.collect { state ->
         // React to camera capability state changes
     }
 }
@@ -654,7 +654,7 @@ Use `Wearables.devices` and device metadata to decide when it is sensible to cre
 ## Links
 
 - [Session lifecycle documentation](https://wearables.developer.meta.com/docs/lifecycle-events)
-- [Android API reference](https://wearables.developer.meta.com/docs/reference/android/dat/0.8)
+- [Android API reference](https://wearables.developer.meta.com/docs/reference/android/dat/latest)
 
 ## Permissions
 
@@ -769,7 +769,7 @@ No eligible device or session won't start?
 |
 +-- Does Wearables.devices contain a linked device? -> Check Bluetooth and range
 |
-+-- Did createSession() or addStream() return a DatResult failure? -> Surface the typed error
++-- Did createSession() or addCamera() return a DatResult failure? -> Surface the typed error
 ```
 
 ## Developer Mode
@@ -798,9 +798,9 @@ Developer Mode must be enabled for local development builds that use `mwdat_appl
 
 ### Stream never reaches `STREAMING`
 
-- Confirm `session.start()` succeeded before calling `session.addStream(...)`
+- Confirm `session.start()` succeeded before calling `session.addCamera(...)`
 - Check camera permission status through `Wearables.checkPermissionStatus(...)`
-- Make sure `stream.start()` returned success
+- Make sure `camera.stream.start()` returned success
 
 ### Photo capture fails
 
@@ -816,7 +816,7 @@ Ensure compatible versions of the SDK, Meta AI app, and glasses firmware. See [v
 ```kotlin
 private const val TAG = "DATWearables"
 
-stream.start()
+camera.stream.start()
     .onFailure { error, _ -> Log.e(TAG, "Failed to start stream: ${error.description}") }
 ```
 
@@ -887,7 +887,7 @@ class MainActivity : ComponentActivity() {
 ```kotlin
 class SessionViewModel : ViewModel() {
     private var session: Session? = null
-    private var stream: Stream? = null
+    private var camera: Camera? = null
 
     fun startCameraSession() {
         val createdSession = Wearables.createSession(AutoDeviceSelector()).getOrElse { error ->
@@ -896,12 +896,12 @@ class SessionViewModel : ViewModel() {
         createdSession.start()
         session = createdSession
 
-        stream = createdSession.addStream(
+        camera = createdSession.addCamera(
             StreamConfiguration(videoQuality = VideoQuality.MEDIUM, frameRate = 24),
         ).getOrElse { error ->
             throw IllegalStateException(error.description)
-        }.also { addedStream ->
-            addedStream.start().getOrElse { error ->
+        }.also { addedCamera ->
+            addedCamera.stream.start().getOrElse { error ->
                 throw IllegalStateException(error.description)
             }
         }
@@ -913,14 +913,14 @@ class SessionViewModel : ViewModel() {
 
 ```kotlin
 viewModelScope.launch {
-    stream?.videoStream?.collect { frame ->
+    camera?.stream?.videoStream?.collect { frame ->
         // Render preview
     }
 }
 
 fun capturePhoto() {
     viewModelScope.launch {
-        stream?.capturePhoto()
+        camera?.stream?.capturePhoto()
             ?.onSuccess { photoData ->
                 savePhoto(photoData.data)
             }
@@ -935,9 +935,9 @@ fun capturePhoto() {
 
 ```kotlin
 fun stopCameraSession() {
-    stream?.stop()
+    camera?.stop()
     session?.stop()
-    stream = null
+    camera = null
     session = null
 }
 ```

@@ -33,10 +33,10 @@ val session = Wearables.createSession(AutoDeviceSelector()).getOrElse { error ->
 }
 session.start()
 
-val stream = session.addStream(StreamConfiguration()).getOrElse { error ->
+val camera = session.addCamera(StreamConfiguration()).getOrElse { error ->
     throw IllegalStateException(error.description)
 }
-stream.start().getOrElse { error ->
+camera.stream.start().getOrElse { error ->
     throw IllegalStateException(error.description)
 }
 ```
@@ -63,7 +63,7 @@ Avoid `getOrThrow()` in user-facing samples. Surface typed errors from `DatResul
 | Type | Purpose | Example |
 |------|---------|---------|
 | `Session` | Device connection lifecycle | `Wearables.createSession(...)` |
-| `Stream` | Camera capability on a session | `session.addStream(...)` |
+| `Stream` | Camera capability on a session | `session.addCamera(...)` → `camera.stream` |
 | `Display` | Display capability on a session | `session.addDisplay(...)` |
 | `*Selector` | Device targeting | `AutoDeviceSelector` |
 | `*Error` | Typed failure surface | `SessionError`, `StreamError` |
@@ -79,7 +79,7 @@ Avoid `getOrThrow()` in user-facing samples. Surface typed errors from `DatResul
 
 ## Live docs search
 
-If your editor supports remote MCP servers, connect `https://mcp.facebook.com/wearables_dat` and use `search_dat_docs` for current DAT setup, session lifecycle, camera streaming, MockDeviceKit, permissions, and exact API symbols.
+If your editor supports remote MCP servers, connect `https://mcp.developer.meta.com/wearables` and use `search_dat_docs` for current DAT setup, session lifecycle, camera streaming, MockDeviceKit, permissions, and exact API symbols. Request Markdown-formatted results when your client supports output formats.
 
 Use `llms.txt` when your tool only supports static reference context.
 
@@ -97,11 +97,11 @@ Use MockDeviceKit to drive registration, device availability, streaming media, a
 
 - Do not call SDK APIs before `Wearables.initialize(context)`
 - Do not assume a session implies streaming or display access; capabilities are attached separately
-- Do not ignore `DatResult` failures from `createSession`, `start`, `addStream`, `addDisplay`, or `capturePhoto`
+- Do not ignore `DatResult` failures from `createSession`, `start`, `addCamera`, `addDisplay`, or `capturePhoto`
 - Do not reuse terminally stopped sessions
 
 ## Links
 
-- [Android API reference](https://wearables.developer.meta.com/docs/reference/android/dat/0.8)
+- [Android API reference](https://wearables.developer.meta.com/docs/reference/android/dat/latest)
 - [Developer documentation](https://wearables.developer.meta.com/docs/develop/)
 - [GitHub repository](https://github.com/facebook/meta-wearables-dat-android)

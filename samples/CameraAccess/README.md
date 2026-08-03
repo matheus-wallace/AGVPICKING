@@ -1,14 +1,17 @@
 # Camera Access App
 
-A sample Android application demonstrating integration with Meta Wearables Device Access Toolkit. This app showcases streaming video from Meta AI glasses, capturing photos, and managing connection states.
+A sample Android application demonstrating integration with Meta Wearables Device Access Toolkit. This app walks the SDK's camera lifecycle as explicit steps — start a session, start the preview, capture or record, stop the preview, end the session — on a single full-bleed camera screen.
 
 ## Features
 
 - Connect to Meta AI glasses
-- Stream camera feed from the device
-- Capture photos from glasses
-- Share captured photos
-- Open firmware and DAT glasses app update flows when required
+- Explicit camera lifecycle: start/end a device session and start/stop the live preview
+- Stream the camera feed from the device
+- Capture photos
+- Record video, with optional sound-in-video
+- Keep recording while the app is backgrounded (foreground service)
+- Preview and share captured photos and recorded videos
+- Open the firmware update flow when required
 
 ## Prerequisites
 
@@ -33,13 +36,13 @@ A sample Android application demonstrating integration with Meta Wearables Devic
 1. Turn 'Developer Mode' on in the Meta AI app.
 1. Launch the app.
 1. Press the "Connect" button to complete app registration.
-1. Once connected, the camera stream from the device will be displayed
+1. Tap "Start Session" to connect to your glasses, then "Preview" to begin the live camera feed.
 1. Use the on-screen controls to:
    - Capture photos
-   - View and save captured photos
-   - Disconnect from the device
-1. If a firmware update is required, tap "Update firmware" from the connection screen.
-1. If session start reports that the app on the glasses is outdated, tap "Update app on glasses" from the connection screen.
+   - Record video, toggling the microphone for sound-in-video
+   - Preview and share captured photos and recorded videos
+   - Stop the preview, end the session, or disconnect from the device
+1. If a firmware update is required, tap "Update firmware".
 
 ## Troubleshooting
 

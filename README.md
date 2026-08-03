@@ -1,7 +1,7 @@
 # Meta Wearables Device Access Toolkit for Android
 
-[![Maven](https://img.shields.io/badge/Maven-0.8.0-brightgreen?logo=apachemaven)](https://github.com/orgs/facebook/packages?repo_name=meta-wearables-dat-android)
-[![Docs](https://img.shields.io/badge/API_Reference-0.8-blue?logo=meta)](https://wearables.developer.meta.com/docs/reference/android/dat/0.8)
+[![Maven](https://img.shields.io/badge/Maven-0.9.0-brightgreen?logo=apachemaven)](https://github.com/orgs/facebook/packages?repo_name=meta-wearables-dat-android)
+[![Docs](https://img.shields.io/badge/API_Reference-0.9-blue?logo=meta)](https://wearables.developer.meta.com/docs/reference/android/dat/0.9)
 
 The Meta Wearables Device Access Toolkit enables developers to utilize Meta's AI glasses to build hands-free wearable experiences into their mobile applications.
 By integrating this SDK, developers can reliably connect to Meta's AI glasses and leverage capabilities like video streaming and photo capture.
@@ -60,7 +60,7 @@ Check the available versions in [GitHub Packages](https://github.com/orgs/facebo
 
 ```toml
 [versions]
-mwdat = "0.8.0"
+mwdat = "0.9.0"
 
 [libraries]
 mwdat-core = { group = "com.meta.wearable", name = "mwdat-core", version.ref = "mwdat" }
@@ -131,6 +131,25 @@ app's `AndroidManifest.xml` file within the `<application>` element:
     <!-- Your activities and other components -->
 </application>
 ```
+
+### Crash reporting
+
+The Wearables Device Access Toolkit can capture crashes originating from SDK code, store them locally,
+and chain with any existing uncaught-exception handler your app installs. Crash reporting is **enabled by
+default**.
+
+To opt out, add the following `<meta-data>` element to your app's `AndroidManifest.xml` file within the
+`<application>` element:
+
+```xml
+<meta-data
+    android:name="com.meta.wearable.mwdat.CRASH_REPORTING_OPT_OUT"
+    android:value="true"
+    />
+```
+
+**Default behavior:** If the `CRASH_REPORTING_OPT_OUT` metadata is missing or set to `false`, crash
+reporting is **enabled**. Set it to `true` to disable SDK crash capture.
 
 ## AI-Assisted Development
 

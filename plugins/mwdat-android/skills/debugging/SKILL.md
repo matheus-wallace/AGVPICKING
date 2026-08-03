@@ -7,6 +7,11 @@ description: Common issues, Developer Mode, version compatibility, and session a
 
 Diagnose common setup, session, and stream issues in DAT SDK integrations.
 
+If local DAT Inspector MCP tools are available, use the `live-debugging-mcp`
+skill before changing app code. Prefer `get_dat_readiness`,
+`get_companion_boundary_diagnosis`, and `get_device_path` to separate app bugs from
+Meta AI app/device boundary issues using read-only DAT evidence.
+
 ## Quick diagnosis
 
 ```text
@@ -20,7 +25,7 @@ No eligible device or session won't start?
 |
 +-- Does Wearables.devices contain a linked device? -> Check Bluetooth and range
 |
-+-- Did createSession() or addStream() return a DatResult failure? -> Surface the typed error
++-- Did createSession() or addCamera() return a DatResult failure? -> Surface the typed error
 ```
 
 ## Developer Mode
@@ -49,9 +54,9 @@ Developer Mode must be enabled for local development builds that use `mwdat_appl
 
 ### Stream never reaches `STREAMING`
 
-- Confirm `session.start()` succeeded before calling `session.addStream(...)`
+- Confirm `session.start()` succeeded before calling `session.addCamera(...)`
 - Check camera permission status through `Wearables.checkPermissionStatus(...)`
-- Make sure `stream.start()` returned success
+- Make sure `camera.stream.start()` returned success
 
 ### Photo capture fails
 
@@ -67,11 +72,27 @@ Ensure compatible versions of the SDK, Meta AI app, and glasses firmware. See [v
 ```kotlin
 private const val TAG = "DATWearables"
 
-stream.start()
+camera.stream.start()
     .onFailure { error, _ -> Log.e(TAG, "Failed to start stream: ${error.description}") }
 ```
 
 Prefer logging typed `DatResult` failures and observed state transitions over generic exceptions.
+
+## Live MCP evidence
+
+When the developer has a local DAT debug server connected to the agent:
+
+- Start with `get_sdk_state` and `get_dat_readiness`
+- Use `get_companion_boundary_diagnosis` for permission, app identity, device
+  capability, device-selection, deeplink-return, and DAM/DWA-visible blockers
+- Use `get_device_path` to trace app -> DAT registration -> Meta AI app permissions ->
+  device selection/link -> session -> stream
+- Ask the developer to reproduce the issue, then use `wait_for_events` with the
+  narrowest category or source that matches the flow
+- Use `export_diagnostic_bundle` for redacted support handoff
+
+Do not treat this as companion app introspection. It is diagnosis from
+app-visible DAT debug events.
 
 ## Checklist
 

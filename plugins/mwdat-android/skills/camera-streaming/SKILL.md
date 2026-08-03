@@ -10,15 +10,15 @@ Use a `Session` and attached `Stream` to receive frames and capture photos.
 ## Key concepts
 
 - **Session**: Device connection lifecycle created through `Wearables.createSession(...)`
-- **Stream**: Camera capability attached to a session with `session.addStream(...)`
+- **Stream**: Camera stream accessed via `camera.stream` after attaching the camera with `session.addCamera(...)`
 - **StreamConfiguration**: Resolution and frame rate configuration for the stream
 - **PhotoData**: Still image captured from glasses while streaming
 
 ## Create a session and attach a stream
 
 ```kotlin
-import com.meta.wearable.dat.camera.Stream
-import com.meta.wearable.dat.camera.addStream
+import com.meta.wearable.dat.camera.Camera
+import com.meta.wearable.dat.camera.addCamera
 import com.meta.wearable.dat.camera.types.StreamConfiguration
 import com.meta.wearable.dat.camera.types.VideoQuality
 import com.meta.wearable.dat.core.Wearables
@@ -29,7 +29,7 @@ val session = Wearables.createSession(AutoDeviceSelector()).getOrElse { error ->
 }
 session.start()
 
-val stream: Stream = session.addStream(
+val camera: Camera = session.addCamera(
     StreamConfiguration(
         videoQuality = VideoQuality.MEDIUM,
         frameRate = 24,
@@ -38,7 +38,7 @@ val stream: Stream = session.addStream(
     throw IllegalStateException(error.description)
 }
 
-stream.start().getOrElse { error ->
+camera.stream.start().getOrElse { error ->
     throw IllegalStateException(error.description)
 }
 ```
@@ -63,7 +63,7 @@ Lower resolution and frame rate usually produce better visual quality per frame 
 
 ```kotlin
 lifecycleScope.launch {
-    stream.state.collect { state ->
+    camera.stream.state.collect { state ->
         when (state) {
             StreamState.STREAMING -> {
                 // Frames are flowing
@@ -84,7 +84,7 @@ lifecycleScope.launch {
 
 ```kotlin
 lifecycleScope.launch {
-    stream.videoStream.collect { frame ->
+    camera.stream.videoStream.collect { frame ->
         updatePreview(frame)
     }
 }
@@ -94,7 +94,7 @@ lifecycleScope.launch {
 
 ```kotlin
 lifecycleScope.launch {
-    stream.capturePhoto()
+    camera.stream.capturePhoto()
         .onSuccess { photoData ->
             val imageBytes = photoData.data
             savePhoto(imageBytes)
@@ -110,13 +110,13 @@ lifecycleScope.launch {
 Stop the stream when you no longer need camera data, then stop the parent session if the device interaction is finished.
 
 ```kotlin
-stream.stop()
+camera.stop()
 session.stop()
 ```
 
-If you want to remove the capability entirely before re-adding it, call `session.removeStream()`.
+If you want to remove the capability entirely before re-adding it, call `session.removeCamera()`.
 
 ## Links
 
-- [Android API reference](https://wearables.developer.meta.com/docs/reference/android/dat/0.8)
+- [Android API reference](https://wearables.developer.meta.com/docs/reference/android/dat/latest)
 - [Integration guide](https://wearables.developer.meta.com/docs/build-integration-android)

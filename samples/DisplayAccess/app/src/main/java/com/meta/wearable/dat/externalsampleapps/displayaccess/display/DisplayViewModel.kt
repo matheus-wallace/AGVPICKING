@@ -10,7 +10,9 @@ package com.meta.wearable.dat.externalsampleapps.displayaccess.display
 
 import android.annotation.SuppressLint
 import android.app.Application
+import android.graphics.BitmapFactory
 import android.util.Log
+import androidx.annotation.DrawableRes
 import androidx.annotation.GuardedBy
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -39,6 +41,7 @@ import com.meta.wearable.dat.display.views.ImageSize
 import com.meta.wearable.dat.display.views.TextColor
 import com.meta.wearable.dat.display.views.TextStyle
 import com.meta.wearable.dat.display.views.VideoPlayer
+import com.meta.wearable.dat.externalsampleapps.displayaccess.R
 import com.meta.wearable.dat.externalsampleapps.displayaccess.SampleApp
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineExceptionHandler
@@ -62,119 +65,115 @@ class DisplayViewModel(
     private const val TUTORIAL_VIDEO_URL =
         "https://github.com/facebook/meta-wearables-dat-android/raw/refs/heads/assets/video_266x150_faststart.mp4"
 
-    private val carMaintenanceTutorials =
-        listOf(
-            CarMaintenanceTutorial(
-                title = "Oil change",
-                duration = "Easy • 45 min",
-                imageUri = "https://www.facebook.com/assets/wearables_dat_display/oil.png",
-                iconImageUri =
-                    "https://www.facebook.com/assets/wearables_dat_display/oil_square.png",
-                steps =
-                    listOf(
-                        CarMaintenanceTutorialStep(
-                            description =
-                                "Park on level ground and let the engine cool before opening the hood."
-                        ),
-                        CarMaintenanceTutorialStep(
-                            description =
-                                "Drain the old oil, replace the filter, and tighten the drain plug."
-                        ),
-                        CarMaintenanceTutorialStep(
-                            description =
-                                "Refill with fresh oil, run the engine briefly, and recheck the level."
-                        ),
+    private val carMaintenanceTutorials = listOf(
+        CarMaintenanceTutorial(
+            title = "Oil change",
+            duration = "Easy • 45 min",
+            imageRes = R.drawable.oil,
+            iconRes = R.drawable.oil_square,
+            steps =
+                listOf(
+                    CarMaintenanceTutorialStep(
+                        description =
+                            "Park on level ground and let the engine cool before opening the hood."
                     ),
-            ),
-            CarMaintenanceTutorial(
-                title = "Fix a flat tire",
-                duration = "Easy • 15 min",
-                imageUri = "https://www.facebook.com/assets/wearables_dat_display/tire.png",
-                iconImageUri =
-                    "https://www.facebook.com/assets/wearables_dat_display/tire_square.png",
-                steps =
-                    listOf(
-                        CarMaintenanceTutorialStep(
-                            description =
-                                "Park away from traffic, engage the brake, and place the wheel wedges."
-                        ),
-                        CarMaintenanceTutorialStep(
-                            description =
-                                "Loosen the lug nuts slightly, raise the car, and remove the flat tire."
-                        ),
-                        CarMaintenanceTutorialStep(
-                            description =
-                                "Mount the spare, tighten in a star pattern, and lower the vehicle."
-                        ),
+                    CarMaintenanceTutorialStep(
+                        description =
+                            "Drain the old oil, replace the filter, and tighten the drain plug."
                     ),
-            ),
-            CarMaintenanceTutorial(
-                title = "Replace headlight bulb",
-                duration = "Very easy • 5 min",
-                imageUri = "https://www.facebook.com/assets/wearables_dat_display/light.png",
-                iconImageUri =
-                    "https://www.facebook.com/assets/wearables_dat_display/light_square.png",
-                steps =
-                    listOf(
-                        CarMaintenanceTutorialStep(
-                            description =
-                                "Open the rear access cover and disconnect the bulb connector."
-                        ),
-                        CarMaintenanceTutorialStep(
-                            description =
-                                "Release the retaining clip, remove the old bulb, and insert the new one."
-                        ),
-                        CarMaintenanceTutorialStep(
-                            description =
-                                "Reconnect power, close the cover, and verify the beam works properly."
-                        ),
+                    CarMaintenanceTutorialStep(
+                        description =
+                            "Refill with fresh oil, run the engine briefly, and recheck the level."
                     ),
-            ),
-            CarMaintenanceTutorial(
-                title = "Check engine light",
-                duration = "Hard • 2 hours",
-                imageUri = "https://www.facebook.com/assets/wearables_dat_display/engine.png",
-                iconImageUri =
-                    "https://www.facebook.com/assets/wearables_dat_display/engine_square.png",
-                steps =
-                    listOf(
-                        CarMaintenanceTutorialStep(
-                            description =
-                                "Check whether the light is steady or flashing, and stop driving if it is flashing."
-                        ),
-                        CarMaintenanceTutorialStep(
-                            description =
-                                "Tighten the gas cap fully and look for obvious issues like low fluids or overheating."
-                        ),
-                        CarMaintenanceTutorialStep(
-                            description =
-                                "Scan for diagnostic codes or schedule service if the light stays on after restarting."
-                        ),
+                ),
+        ),
+        CarMaintenanceTutorial(
+            title = "Fix a flat tire",
+            duration = "Easy • 15 min",
+            imageUri = "https://www.facebook.com/assets/wearables_dat_display/tire.png",
+            iconImageUri = "https://www.facebook.com/assets/wearables_dat_display/tire_square.png",
+            steps =
+                listOf(
+                    CarMaintenanceTutorialStep(
+                        description =
+                            "Park away from traffic, engage the brake, and place the wheel wedges."
                     ),
-            ),
-            CarMaintenanceTutorial(
-                title = "Change washer fluid",
-                duration = "Very easy • 3 min",
-                imageUri = "https://www.facebook.com/assets/wearables_dat_display/washer.png",
-                iconImageUri =
-                    "https://www.facebook.com/assets/wearables_dat_display/washer_square.png",
-                steps =
-                    listOf(
-                        CarMaintenanceTutorialStep(
-                            description =
-                                "Open the hood and locate the washer fluid reservoir cap with the windshield symbol."
-                        ),
-                        CarMaintenanceTutorialStep(
-                            description =
-                                "Pour washer fluid into the reservoir carefully until it reaches the fill line."
-                        ),
-                        CarMaintenanceTutorialStep(
-                            description =
-                                "Close the cap securely and test the sprayers to confirm proper flow."
-                        ),
+                    CarMaintenanceTutorialStep(
+                        description =
+                            "Loosen the lug nuts slightly, raise the car, and remove the flat tire."
                     ),
-            ),
-        )
+                    CarMaintenanceTutorialStep(
+                        description =
+                            "Mount the spare, tighten in a star pattern, and lower the vehicle."
+                    ),
+                ),
+        ),
+        CarMaintenanceTutorial(
+            title = "Replace headlight bulb",
+            duration = "Very easy • 5 min",
+            imageUri = "https://www.facebook.com/assets/wearables_dat_display/light.png",
+            iconImageUri = "https://www.facebook.com/assets/wearables_dat_display/light_square.png",
+            steps =
+                listOf(
+                    CarMaintenanceTutorialStep(
+                        description =
+                            "Open the rear access cover and disconnect the bulb connector."
+                    ),
+                    CarMaintenanceTutorialStep(
+                        description =
+                            "Release the retaining clip, remove the old bulb, and insert the new one."
+                    ),
+                    CarMaintenanceTutorialStep(
+                        description =
+                            "Reconnect power, close the cover, and verify the beam works properly."
+                    ),
+                ),
+        ),
+        CarMaintenanceTutorial(
+            title = "Check engine light",
+            duration = "Hard • 2 hours",
+            imageUri = "https://www.facebook.com/assets/wearables_dat_display/engine.png",
+            iconImageUri =
+                "https://www.facebook.com/assets/wearables_dat_display/engine_square.png",
+            steps =
+                listOf(
+                    CarMaintenanceTutorialStep(
+                        description =
+                            "Check whether the light is steady or flashing, and stop driving if it is flashing."
+                    ),
+                    CarMaintenanceTutorialStep(
+                        description =
+                            "Tighten the gas cap fully and look for obvious issues like low fluids or overheating."
+                    ),
+                    CarMaintenanceTutorialStep(
+                        description =
+                            "Scan for diagnostic codes or schedule service if the light stays on after restarting."
+                    ),
+                ),
+        ),
+        CarMaintenanceTutorial(
+            title = "Change washer fluid",
+            duration = "Very easy • 3 min",
+            imageUri = "https://www.facebook.com/assets/wearables_dat_display/washer.png",
+            iconImageUri =
+                "https://www.facebook.com/assets/wearables_dat_display/washer_square.png",
+            steps =
+                listOf(
+                    CarMaintenanceTutorialStep(
+                        description =
+                            "Open the hood and locate the washer fluid reservoir cap with the windshield symbol."
+                    ),
+                    CarMaintenanceTutorialStep(
+                        description =
+                            "Pour washer fluid into the reservoir carefully until it reaches the fill line."
+                    ),
+                    CarMaintenanceTutorialStep(
+                        description =
+                            "Close the cap securely and test the sprayers to confirm proper flow."
+                    ),
+                ),
+        ),
+    )
   }
 
   private val dispatcher: CoroutineDispatcher = Dispatchers.IO
@@ -504,13 +503,7 @@ class DisplayViewModel(
     sendContent {
       flexBox(direction = Direction.COLUMN, gap = 12) {
         flexBox(padding = 24, background = FlexBoxBackground.CARD) {
-          tutorial.imageUri?.let { imageUri ->
-            image(
-                uri = imageUri,
-                sizePreset = ImageSize.FILL,
-                cornerRadius = CornerRadius.MEDIUM,
-            )
-          }
+          tutorialImage(tutorial.imageRes, tutorial.imageUri)
           text(tutorial.title, style = TextStyle.HEADING)
           text(tutorial.duration, style = TextStyle.META, color = TextColor.SECONDARY)
         }
@@ -521,14 +514,16 @@ class DisplayViewModel(
             crossAlignment = Alignment.CENTER,
             wrap = true,
         ) {
-          button(
-              "Back",
-              onClick = { displayCarMaintenanceScreen() },
-          )
-          button(
-              "Start",
-              onClick = { displayCarMaintenanceTutorialStep(tutorial, 0) },
-          )
+          buttonGroup {
+            button(
+                "Back",
+                onClick = { displayCarMaintenanceScreen() },
+            )
+            button(
+                "Start",
+                onClick = { displayCarMaintenanceTutorialStep(tutorial, 0) },
+            )
+          }
         }
       }
     }
@@ -546,11 +541,10 @@ class DisplayViewModel(
                 return@launch
               }
 
-      val player =
-          VideoPlayer(
-              source = VideoSource.Url(TUTORIAL_VIDEO_URL),
-              codec = VideoCodec.MP4,
-          )
+      val player = VideoPlayer(
+          source = VideoSource.Url(TUTORIAL_VIDEO_URL),
+          codec = VideoCodec.MP4,
+      )
 
       val result = currentDisplay.sendContent { video(player = player) }
       result.fold(
@@ -600,41 +594,43 @@ class DisplayViewModel(
             crossAlignment = Alignment.CENTER,
         ) {
           val isLastStep = clampedIndex == tutorial.steps.lastIndex
-          button(
-              "Previous",
-              style = ButtonStyle.PRIMARY,
-              iconName = IconName.TRIANGLE_LEFT_VERTICAL_LINE,
-              onClick = {
-                if (clampedIndex == 0) {
-                  displayCarMaintenanceTutorialDetail(tutorial)
-                } else {
-                  displayCarMaintenanceTutorialStep(tutorial, clampedIndex - 1)
-                }
-              },
-          )
-          button(
-              if (isLastStep) "Done" else "Next",
-              style = ButtonStyle.PRIMARY,
-              iconName =
-                  if (isLastStep) {
-                    IconName.CHECKMARK
+          buttonGroup {
+            button(
+                "Previous",
+                style = ButtonStyle.PRIMARY,
+                iconName = IconName.TRIANGLE_LEFT_VERTICAL_LINE,
+                onClick = {
+                  if (clampedIndex == 0) {
+                    displayCarMaintenanceTutorialDetail(tutorial)
                   } else {
-                    IconName.TRIANGLE_RIGHT_VERTICAL_LINE
-                  },
-              onClick = {
-                if (isLastStep) {
-                  displayCarMaintenanceScreen()
-                } else if (clampedIndex < tutorial.steps.lastIndex) {
-                  displayCarMaintenanceTutorialStep(tutorial, clampedIndex + 1)
-                }
-              },
-          )
-          button(
-              "Watch video",
-              style = ButtonStyle.SECONDARY,
-              iconName = IconName.VIDEO_CAMERA,
-              onClick = { displayTutorialVideo(tutorial, clampedIndex) },
-          )
+                    displayCarMaintenanceTutorialStep(tutorial, clampedIndex - 1)
+                  }
+                },
+            )
+            button(
+                if (isLastStep) "Done" else "Next",
+                style = ButtonStyle.PRIMARY,
+                iconName =
+                    if (isLastStep) {
+                      IconName.CHECKMARK
+                    } else {
+                      IconName.TRIANGLE_RIGHT_VERTICAL_LINE
+                    },
+                onClick = {
+                  if (isLastStep) {
+                    displayCarMaintenanceScreen()
+                  } else if (clampedIndex < tutorial.steps.lastIndex) {
+                    displayCarMaintenanceTutorialStep(tutorial, clampedIndex + 1)
+                  }
+                },
+            )
+            button(
+                "Watch video",
+                style = ButtonStyle.SECONDARY,
+                iconName = IconName.VIDEO_CAMERA,
+                onClick = { displayTutorialVideo(tutorial, clampedIndex) },
+            )
+          }
         }
       }
     }
@@ -653,13 +649,9 @@ class DisplayViewModel(
         onClick = { displayCarMaintenanceTutorialDetail(tutorial) },
     ) {
       flexBox(direction = Direction.ROW, gap = 12, crossAlignment = Alignment.CENTER) {
-        tutorial.iconImageUri?.let { imageUri ->
+        if (tutorial.iconRes != null || tutorial.iconImageUri != null) {
           flexBox(direction = Direction.COLUMN, flexGrow = 1f) {
-            image(
-                uri = imageUri,
-                sizePreset = ImageSize.FILL,
-                cornerRadius = CornerRadius.MEDIUM,
-            )
+            tutorialImage(tutorial.iconRes, tutorial.iconImageUri)
           }
         }
         flexBox(direction = Direction.COLUMN, flexGrow = 7f) {
@@ -667,6 +659,18 @@ class DisplayViewModel(
           text(tutorial.duration, style = TextStyle.META, color = TextColor.SECONDARY)
         }
       }
+    }
+  }
+
+  private fun FlexBoxScope.tutorialImage(@DrawableRes res: Int?, uri: String?) {
+    val bitmap = res?.let { resId ->
+      BitmapFactory.decodeResource(getApplication<Application>().resources, resId)
+    }
+    when {
+      bitmap != null ->
+          image(bitmap = bitmap, sizePreset = ImageSize.FILL, cornerRadius = CornerRadius.MEDIUM)
+      uri != null ->
+          image(uri = uri, sizePreset = ImageSize.FILL, cornerRadius = CornerRadius.MEDIUM)
     }
   }
 
@@ -740,6 +744,8 @@ private data class CarMaintenanceTutorial(
     val duration: String,
     val imageUri: String? = null,
     val iconImageUri: String? = null,
+    @param:DrawableRes val imageRes: Int? = null,
+    @param:DrawableRes val iconRes: Int? = null,
     val steps: List<CarMaintenanceTutorialStep>,
 )
 

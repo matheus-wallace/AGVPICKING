@@ -5,6 +5,37 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.0] - 2026-08-03
+
+### Added
+
+- [API] **Consolidated `Camera` capability.** `DeviceSession.addCamera(streamConfiguration)` returns a `Camera` that owns the camera hardware resource and exposes its child features — `Camera.stream` — with `Camera.stop()` to detach and `CameraState` (`STARTING`, `STARTED`, `STOPPING`, `STOPPED`) reporting the camera lifecycle. Use `DeviceSession.removeCamera()` to detach.
+- [API] **Display `buttonGroup` component.** New `FlexBoxScope.buttonGroup { }` (backed by `ButtonGroupScope.button(...)`) and `ButtonGroupAlignment` enum for laying out button groups within display content.
+- [API] `FlexBoxScope.image(bitmap = ...)` for rendering local `Bitmap` images in display content, in addition to remote URL images.
+- [API] Display tap/click handling: taps on display components are routed back to the app.
+- [API] Crash-reporting opt-out via an `AndroidManifest.xml` `<meta-data>` entry — `<meta-data android:name="com.meta.wearable.mwdat.CRASH_REPORTING_OPT_OUT" android:value="true" />` disables DAT SDK crash reporting.
+- Camera Access sample: record video with optional sound-in-video, continuing while the app is backgrounded.
+
+### Changed
+
+- [API] `DatResult` is now emitted as a Java-visible reference type instead of a Kotlin inline value class, so public DAT APIs such as `Wearables.initialize(...)`, `Wearables.createSession(...)`, `Stream.start()`, `Stream.capturePhoto(...)`, `Display.sendContent(...)`, and `MockDeviceKitInterface.pairGlasses(...)` can be found by Java callers under their source names.
+- [API] `FlexBoxScope.image(...)` gained a `Bitmap` parameter for local images. This is a binary-breaking change to the `image(...)` signature.
+- [API] `ContentScope.flexBox(...)` and `ContentScope.video(...)` no longer return `DisplayComponent`. Compose display trees purely through the builder blocks; the returned reference is no longer useful and has been dropped.
+- Camera Access sample rebuilt around the explicit camera lifecycle (start session, start preview, capture or record, stop preview, end session) on a single full-bleed camera screen, consolidating the previous camera samples into one.
+
+### Removed
+
+- [API] `DeviceSession.addStream(...)` and `DeviceSession.removeStream()` — streaming is now reached through the consolidated `Camera`: use `DeviceSession.addCamera()` and access the stream via `Camera.stream` (and `removeCamera()` to detach). `Stream` is now a child of `Camera` and can no longer be added to a session directly.
+- [API] Support for opting out of the Device Access Toolkit App Model (DAM). DAM is now always enabled, so the `com.meta.wearable.mwdat.DAM_ENABLED` manifest metadata key is ignored. No action is required; you can delete the `<meta-data .../>` entry from your `AndroidManifest.xml` at your convenience.
+- [API] `DisplayComponent` interface. Display trees are now composed purely through builder blocks; the interface is no longer needed. (Ties to the `flexBox`/`video` return-type change under Changed.)
+- [API] `VideoScope` and the `ContentScope.video(VideoPlayer) -> VideoScope` builder. Use `ContentScope.video(player) { ... }` (the `Unit`-returning builder form).
+- [API] `StreamError.THERMAL_EMERGENCY`, `RegistrationError.INCOMPATIBLE_SDK_LEVEL`, `DisplayError.CAPABILITY_DENIED`, `DeviceSessionError.DEVICE_POWERED_OFF`, and `DeviceSessionError.NOT_INITIALIZED` enum cases.
+
+### Fixed
+
+- `MockDevice` phone-camera stream no longer stops after a few seconds.
+- `mwdat-mockdevice` now ships `-dontwarn` ProGuard consumer rules so external Gradle apps that use `mockdevice` without `camera` build successfully under R8 (previously failed with missing-class errors on internal camera/streaming types).
+
 ## [0.8.0] - 2026-06-25
 
 ### Added

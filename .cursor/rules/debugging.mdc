@@ -20,7 +20,7 @@ No eligible device or session won't start?
 |
 +-- Does Wearables.devices contain a linked device? -> Check Bluetooth and range
 |
-+-- Did createSession() or addStream() return a DatResult failure? -> Surface the typed error
++-- Did createSession() or addCamera() return a DatResult failure? -> Surface the typed error
 ```
 
 ## Developer Mode
@@ -49,9 +49,9 @@ Developer Mode must be enabled for local development builds that use `APPLICATIO
 
 ### Stream never reaches `STREAMING`
 
-- Confirm `session.start()` succeeded before calling `session.addStream(...)`
+- Confirm `session.start()` succeeded before calling `session.addCamera(...)`
 - Check camera permission status through `Wearables.checkPermissionStatus(...)`
-- Make sure `stream.start()` returned success
+- Make sure `camera.stream.start()` returned success
 
 ### Photo capture fails
 
@@ -67,7 +67,7 @@ Ensure compatible versions of the SDK, Meta AI app, and glasses firmware. See [v
 ```kotlin
 private const val TAG = "DATWearables"
 
-stream.start()
+camera.stream.start()
     .onFailure { error, _ -> Log.e(TAG, "Failed to start stream: ${error.description}") }
 ```
 

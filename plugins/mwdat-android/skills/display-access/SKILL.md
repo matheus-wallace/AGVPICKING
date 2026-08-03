@@ -29,7 +29,7 @@ dependencies {
 
 ## Configure the app for Display
 
-Display apps need the same core DAT setup as other apps plus DAM enabled:
+Display apps need the same core DAT setup as other apps:
 
 ```xml
 <uses-permission android:name="android.permission.BLUETOOTH" />
@@ -43,9 +43,6 @@ Display apps need the same core DAT setup as other apps plus DAM enabled:
     <meta-data
         android:name="com.meta.wearable.mwdat.CLIENT_TOKEN"
         android:value="${mwdat_client_token}" />
-    <meta-data
-        android:name="com.meta.wearable.mwdat.DAM_ENABLED"
-        android:value="true" />
 </application>
 ```
 
@@ -317,5 +314,5 @@ Use the Display Access sample app for a complete flow: registration, device sele
 
 ## Links
 
-- [Android API reference](https://wearables.developer.meta.com/docs/reference/android/dat/0.8)
+- [Android API reference](https://wearables.developer.meta.com/docs/reference/android/dat/latest)
 - [Developer documentation](https://wearables.developer.meta.com/docs/develop/)

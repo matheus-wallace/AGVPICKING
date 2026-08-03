@@ -50,7 +50,7 @@ STOPPED -> STARTING -> STARTED -> STREAMING -> STOPPING -> STOPPED -> CLOSED
 
 ```kotlin
 lifecycleScope.launch {
-    stream.state.collect { state ->
+    camera.stream.state.collect { state ->
         // React to camera capability state changes
     }
 }
@@ -96,4 +96,4 @@ Use `Wearables.devices` and device metadata to decide when it is sensible to cre
 ## Links
 
 - [Session lifecycle documentation](https://wearables.developer.meta.com/docs/lifecycle-events)
-- [Android API reference](https://wearables.developer.meta.com/docs/reference/android/dat/0.8)
+- [Android API reference](https://wearables.developer.meta.com/docs/reference/android/dat/latest)

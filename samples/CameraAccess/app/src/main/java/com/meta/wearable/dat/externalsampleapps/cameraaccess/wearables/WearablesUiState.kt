@@ -17,15 +17,17 @@ import com.meta.wearable.dat.core.types.RegistrationState
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.persistentListOf
 
+data class RecentError(
+    val id: Long,
+    val message: String,
+)
+
 data class WearablesUiState(
     val registrationState: RegistrationState = RegistrationState.UNAVAILABLE,
     val devices: ImmutableList<DeviceIdentifier> = persistentListOf(),
-    val recentError: String? = null,
-    val isStreaming: Boolean = false,
+    val recentError: RecentError? = null,
     val isDebugMenuVisible: Boolean = false,
-    val isGettingStartedSheetVisible: Boolean = false,
     val isFirmwareUpdateRequired: Boolean = false,
-    val isDatAppUpdateRequired: Boolean = false,
     val hasActiveDevice: Boolean = false,
     val canRegister: Boolean = false,
 ) {

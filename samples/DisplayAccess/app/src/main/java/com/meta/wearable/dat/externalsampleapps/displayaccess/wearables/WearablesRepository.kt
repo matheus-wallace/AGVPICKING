@@ -110,9 +110,9 @@ class WearablesRepository(
           ?: synchronized(this) {
             instance
                 ?: WearablesRepository(
-                        applicationContext,
-                        CoroutineScope(SupervisorJob() + Dispatchers.Main),
-                    )
+                    applicationContext,
+                    CoroutineScope(SupervisorJob() + Dispatchers.Main),
+                )
                     .also { instance = it }
           }
     }

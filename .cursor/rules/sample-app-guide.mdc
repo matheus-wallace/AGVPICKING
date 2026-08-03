@@ -52,7 +52,7 @@ class MainActivity : ComponentActivity() {
 ```kotlin
 class SessionViewModel : ViewModel() {
     private var session: Session? = null
-    private var stream: Stream? = null
+    private var camera: Camera? = null
 
     fun startCameraSession() {
         val createdSession = Wearables.createSession(AutoDeviceSelector()).getOrElse { error ->
@@ -61,12 +61,12 @@ class SessionViewModel : ViewModel() {
         createdSession.start()
         session = createdSession
 
-        stream = createdSession.addStream(
+        camera = createdSession.addCamera(
             StreamConfiguration(videoQuality = VideoQuality.MEDIUM, frameRate = 24),
         ).getOrElse { error ->
             throw IllegalStateException(error.description)
-        }.also { addedStream ->
-            addedStream.start().getOrElse { error ->
+        }.also { addedCamera ->
+            addedCamera.stream.start().getOrElse { error ->
                 throw IllegalStateException(error.description)
             }
         }
@@ -78,14 +78,14 @@ class SessionViewModel : ViewModel() {
 
 ```kotlin
 viewModelScope.launch {
-    stream?.videoStream?.collect { frame ->
+    camera?.stream?.videoStream?.collect { frame ->
         // Render preview
     }
 }
 
 fun capturePhoto() {
     viewModelScope.launch {
-        stream?.capturePhoto()
+        camera?.stream?.capturePhoto()
             ?.onSuccess { photoData ->
                 savePhoto(photoData.data)
             }
@@ -100,9 +100,9 @@ fun capturePhoto() {
 
 ```kotlin
 fun stopCameraSession() {
-    stream?.stop()
+    camera?.stop()
     session?.stop()
-    stream = null
+    camera = null
     session = null
 }
 ```
