@@ -150,4 +150,19 @@ enum class GatilhoPausaDat {
   HASTES_FECHADAS,
   OCULOS_REMOVIDO,
   TOQUE,
+
+  /**
+   * Pausa cuja causa o SDK não revela.
+   *
+   * O `DeviceSessionState.PAUSED` do DAT informa apenas que a sessão pausou; o único outro
+   * canal de estado do dispositivo (`Wearables.getDeviceState`) carrega somente
+   * `ThermalLevel`. Nenhum dos três gatilhos concretos acima é distinguível a partir daí,
+   * então toda pausa observada pela sessão real chega com este valor.
+   *
+   * Os três valores acima seguem existindo para quando o gatilho for conhecido por outra
+   * via — hoje, o painel de dev. Se uma versão futura do SDK expuser a causa, só o
+   * mapeamento em `DatSessionController` muda: o reducer colapsa qualquer `PausaDat` em
+   * [MotivoPausa.LIFECYCLE_DAT] independente do gatilho.
+   */
+  NAO_ESPECIFICADO,
 }

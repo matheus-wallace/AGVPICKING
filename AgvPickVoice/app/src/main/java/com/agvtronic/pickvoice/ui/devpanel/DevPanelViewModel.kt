@@ -25,6 +25,10 @@ import kotlinx.coroutines.launch
  * publica evento passa a ser eles, e a tela espelho do doc §12 toma o lugar desta. O valor
  * aqui é provar o padrão de ator num processo Android real e exercitar o fluxo do §3.2 de
  * ponta a ponta com dados de verdade do repositório.
+ *
+ * Cobre só o fluxo operacional. Os eventos de ciclo de vida da sessão vêm do
+ * `DatSessionController`, que observa o SDK de verdade — o painel não sobe mais a sessão
+ * sozinho, então os botões só ficam úteis depois que a sessão real chega em `AguardandoOrdem`.
  */
 class DevPanelViewModel(
     private val actor: PickingActor,
@@ -52,19 +56,6 @@ class DevPanelViewModel(
     viewModelScope.launch {
       val resumo = repository.ordensDisponiveis().first()
       ordemFlow.value = repository.ordem(resumo.id)
-
-      // O produtor real destes três eventos é a sessão DAT, que só existe a partir da
-      // mudança `add-dat-session-mockdevice`. Até lá o painel faz o papel dela e sobe a
-      // sessão sozinho, para que o primeiro botão útil seja "Confirmar ordem".
-      //
-      // Só a partir de Ocioso: numa recriação de Activity o estado corrente é preservado
-      // (o ator vive no escopo da aplicação), e reenviar o bootstrap ali reiniciaria um
-      // fluxo em andamento a partir de Erro.
-      if (actor.state.value is PickingState.Ocioso) {
-        actor.send(PickingEvent.RegistroIniciado)
-        actor.send(PickingEvent.RegistroConcluido)
-        actor.send(PickingEvent.SessaoPreparada)
-      }
     }
   }
 

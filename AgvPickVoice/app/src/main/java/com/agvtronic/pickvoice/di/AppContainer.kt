@@ -1,6 +1,7 @@
 package com.agvtronic.pickvoice.di
 
 import android.content.Context
+import com.agvtronic.pickvoice.dat.DatSessionController
 import com.agvtronic.pickvoice.data.PickingRepository
 import com.agvtronic.pickvoice.data.mock.MockPickingRepository
 import com.agvtronic.pickvoice.domain.statemachine.PickingActor
@@ -47,4 +48,23 @@ class AppContainer(private val appContext: Context) {
    * estado direto.
    */
   val pickingActor: PickingActor = PickingActor(appScope)
+
+  /**
+   * Escopo do controlador de sessão, separado do [appScope] por causa do dispatcher.
+   *
+   * `Wearables.startRegistration` abre o fluxo do app Meta AI a partir de uma `Activity`, e o
+   * `WearablesRepository` do sample `DisplayAccess` observa o SDK em [Dispatchers.Main] pelo
+   * mesmo motivo. O ator continua em [Dispatchers.Default] — ele só faz CPU, e misturar as
+   * duas coisas num escopo só colocaria o reducer na main thread sem necessidade.
+   *
+   * Também nunca é cancelado: a sessão DAT é de escopo de processo (doc §2.3), não de tela.
+   */
+  private val datScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+
+  /**
+   * O produtor real dos eventos de ciclo de vida da sessão. Quem chama `iniciar` é a
+   * `MainActivity`, depois de resolver as permissões Android.
+   */
+  val datSessionController: DatSessionController =
+      DatSessionController(appContext, pickingActor, datScope)
 }
