@@ -12,11 +12,15 @@ Ler ou escrever dados de ordem, produto, lote, endereço ou usuário através da
 - **THEN** buscar a ordem atual, suas linhas e o operador ainda funciona, porque a implementação mockada nunca acessa a rede
 
 ### Requirement: Dados mockados estruturalmente realistas
-Ordens mockadas DEVEM usar formatos de SKU, GTIN e lote estruturalmente consistentes com produtos reais que a operação movimenta, de forma que a lógica de decodificação e parsing desenvolvida contra o mock se comporte igual contra dados reais depois.
+Ordens mockadas DEVEM usar as convenções de campo e formato do WMS de produção da AGV — nomes de campo, contagem de dígitos e codificação de endereço — de forma que a lógica de decodificação e parsing desenvolvida contra o mock se comporte igual contra dados reais depois, e que a futura implementação HTTP mapeie campo a campo em vez de traduzir nomenclatura. Todo valor DEVE ser fictício: nenhum pedido, praça, produto, lote, UA ou endereço de produção pode aparecer no dataset.
 
-#### Scenario: Ordem mockada bate com formatos de produto reais
+#### Scenario: Ordem mockada bate com as convenções do WMS
 - **WHEN** uma ordem mockada é carregada
-- **THEN** todo GTIN, lote e campo de endereço de cada linha segue o mesmo formato que produtos reais da AGV e endereços de armazém reais usam, não valores placeholder ou arbitrários
+- **THEN** o cabeçalho traz `praca` alfanumérica de 11 caracteres e `pedido` numérico de 6 dígitos, e cada linha traz `produto` numérico de 6 dígitos, `partida` (lote) de 8 dígitos, `ua` e `recnum` de 8 dígitos, `ean` EAN-13 e `dun14` DUN-14 ambos com dígito verificador válido e derivados do mesmo código base, e endereço decomposto em `cd`/`setor`/`andar`/`predio`/`rua` — não valores placeholder nem uma nomenclatura inventada
+
+#### Scenario: Endereço mockado gera o código de barras que a etiqueta do armazém carrega
+- **WHEN** o código de barras de um endereço mockado é montado
+- **THEN** ele segue o layout `cd(2 dígitos) + setor(2 dígitos) + andar(1 letra) + predio(4 dígitos, zero à esquerda) + rua`, com `andar` como letra e `predio` guardado sem zeros à esquerda, exatamente como o cadastro de endereço e o app de RF do WMS fazem
 
 ### Requirement: Repositório trocável sem tocar nos consumidores
 O acesso a dados de ordem/produto/endereço/usuário DEVE ser exposto por uma interface. Substituir a implementação mockada por uma implementação real (ex: baseada em HTTP) NÃO DEVE exigir nenhuma mudança em código que dependa da interface.

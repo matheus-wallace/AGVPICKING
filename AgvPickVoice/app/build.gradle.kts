@@ -50,10 +50,16 @@ dependencies {
   implementation(libs.androidx.lifecycle.runtime.compose)
   implementation(libs.androidx.lifecycle.viewmodel.compose)
   implementation(libs.androidx.material3)
+  implementation(libs.kotlinx.coroutines.android)
   implementation(libs.mwdat.core)
   implementation(libs.mwdat.camera)
 
   // MockDeviceKit only ships in debug builds — see app/src/debug/.../mockdevice/.
   // Never linked into release, so there is no risk of the mock UI reaching an operator device.
   debugImplementation(libs.mwdat.mockdevice)
+
+  // domain/ and data/ are pure Kotlin by design (doc §3, §11) — plain JVM unit tests,
+  // no emulator, no Robolectric.
+  testImplementation(libs.junit)
+  testImplementation(libs.kotlinx.coroutines.test)
 }
