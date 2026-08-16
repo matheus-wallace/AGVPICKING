@@ -1,0 +1,46 @@
+# Calibração de bancada do pipeline de voz — ver AjustesAsr.kt.
+#
+# Este arquivo NÃO é lido do repositório. Ele é um modelo para empurrar ao aparelho:
+#
+#   adb push AgvPickVoice/ajustes-asr.properties.exemplo \
+#     /sdcard/Android/data/com.agvtronic.pickvoice/files/ajustes-asr.properties
+#   adb shell am force-stop com.agvtronic.pickvoice
+#
+# Os ajustes são lidos uma vez, na inicialização do app — daí o force-stop.
+# Sem o arquivo no aparelho, valem exatamente os valores abaixo, que são os defaults
+# de produção. Toda chave é opcional: o que faltar mantém o default.
+#
+# Para voltar ao comportamento padrão, basta apagar o arquivo do aparelho:
+#   adb shell rm /sdcard/Android/data/com.agvtronic.pickvoice/files/ajustes-asr.properties
+
+# Band-pass 300-3400 Hz + decimação para 8 kHz, imitando o canal HFP do óculos (doc §10.1).
+# Desligar entrega o microfone a 16 kHz cru: é o teste que separa "o modelo pequeno não dá
+# conta" de "a degradação de canal é que está atrapalhando".
+degradarCanal=true
+
+# AcousticEchoCanceler sobre a captura. Só faz sentido quando o TTS do doc §5.4 existir e
+# estiver tocando no mesmo aparelho; até lá ele só atenua o sinal.
+cancelamentoDeEco=false
+
+# Multiplica as amostras antes do decodificador, com clipping em ±1.0. Não melhora a relação
+# sinal/ruído — amplifica o ruído junto. Existe para descartar a hipótese, não para resolver.
+ganho=1.0
+
+# t_end do endpointer do Vosk: silêncio depois da fala que fecha a elocução.
+# 280 ms é o perfil COMANDO_CURTO do doc §5.1. Se o logcat mostrar
+# `Parcial: "pa"` seguido de `elocução fechada sem texto`, é este número que precisa subir.
+silencioFinalMs=280
+
+# t_start_max: sem nenhuma palavra decodificada, o Vosk fecha uma elocução vazia e recomeça.
+silencioAntesDaFalaMs=5000
+
+# t_max: teto duro de duração de uma elocução.
+duracaoMaximaMs=10000
+
+# Loga a hipótese parcial a cada mudança — é o que mostra o que o ASR está ouvindo.
+logParciais=true
+
+# Loga RMS e pico do sinal capturado, uma vez por segundo.
+# Referências medidas no Galaxy S20 FE: silêncio de sala ~-63 dBFS de RMS,
+# voz normal a um palmo ~-28 dBFS de pico, alto-falante do Mac a um metro ~-30 dBFS.
+logNivel=true

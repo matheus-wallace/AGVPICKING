@@ -54,6 +54,10 @@ dependencies {
   implementation(libs.mwdat.core)
   implementation(libs.mwdat.camera)
 
+  // Vosk — ASR local, offline (doc §5). O modelo pt-BR vive em src/main/assets/, não vem
+  // pela dependência: o único modelo publicado no Maven Central é o de inglês.
+  implementation(libs.vosk.android)
+
   // MockDeviceKit only ships in debug builds — see app/src/debug/.../mockdevice/.
   // Never linked into release, so there is no risk of the mock UI reaching an operator device.
   debugImplementation(libs.mwdat.mockdevice)

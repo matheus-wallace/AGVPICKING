@@ -1,6 +1,10 @@
 package com.agvtronic.pickvoice.di
 
 import android.content.Context
+import com.agvtronic.pickvoice.audio.AjustesAsr
+import com.agvtronic.pickvoice.audio.AudioMicrofoneSimulado
+import com.agvtronic.pickvoice.audio.FonteAudio
+import com.agvtronic.pickvoice.audio.ReconhecedorDeComando
 import com.agvtronic.pickvoice.dat.DatSessionController
 import com.agvtronic.pickvoice.data.PickingRepository
 import com.agvtronic.pickvoice.data.mock.MockPickingRepository
@@ -17,7 +21,6 @@ import kotlinx.coroutines.SupervisorJob
  * concrete implementation once, expose it through an interface-typed val.
  */
 class AppContainer(private val appContext: Context) {
-  // TODO(#audio-source-abstraction): expose `val fonteAudio: FonteAudio`
 
   /**
    * Escopo de vida do processo, dono da corrotina consumidora do [pickingActor].
@@ -67,4 +70,32 @@ class AppContainer(private val appContext: Context) {
    */
   val datSessionController: DatSessionController =
       DatSessionController(appContext, pickingActor, datScope)
+
+  /**
+   * Calibração do pipeline de voz, lida uma vez e compartilhada pelas duas peças de áudio.
+   *
+   * Uma instância só de propósito: a taxa de amostragem que a [fonteAudio] declara e a que o
+   * `Recognizer` do [reconhecedorDeComando] usa **têm que ser a mesma**, e as duas saem daqui.
+   * Ler o arquivo duas vezes abriria a porta para elas divergirem se ele mudasse no meio.
+   */
+  private val ajustesAsr: AjustesAsr = AjustesAsr.carregar(appContext)
+
+  /**
+   * A fonte de áudio do doc §5.2, interface-tipada pelo mesmo motivo do [pickingRepository]:
+   * trocar o microfone do celular pelo HFP do óculos na manhã de 18/09 é **esta linha e mais
+   * nenhuma** — é literalmente o que o doc §13.3 exige.
+   */
+  val fonteAudio: FonteAudio = AudioMicrofoneSimulado(ajustesAsr)
+
+  /**
+   * O produtor de eventos por voz.
+   *
+   * Construí-lo já dispara a carga do modelo Vosk na thread de áudio dele, ainda no
+   * `onCreate` da `Application` — é o doc §5.3 ("carregar na inicialização do app, não ao
+   * criar a sessão"). A construção não bloqueia: a carga é assíncrona e roda em paralelo com
+   * a subida da sessão DAT, que acontece no [datScope]. Quem chama `iniciar` é a
+   * `MainActivity`, depois de resolver `RECORD_AUDIO`.
+   */
+  val reconhecedorDeComando: ReconhecedorDeComando =
+      ReconhecedorDeComando(appContext, fonteAudio, pickingActor, ajustesAsr)
 }

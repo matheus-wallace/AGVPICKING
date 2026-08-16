@@ -18,16 +18,19 @@ class MainActivity : ComponentActivity() {
   private val container by lazy { (application as PickVoiceApplication).container }
 
   /**
-   * Permissões Android exigidas pelo SDK do DAT antes de registrar ou criar sessão.
+   * Permissões Android exigidas antes de a sessão DAT e a captura de voz poderem começar.
    *
-   * O resultado não é ramificado aqui de propósito: negada ou concedida, o
-   * `DatSessionController` é chamado do mesmo jeito e ele próprio verifica a permissão,
-   * publicando `RegistroFalhou` quando falta — assim a falha aparece como estado `Erro` no
-   * painel, e não como um app parado em `Ocioso` sem explicação.
+   * O resultado não é ramificado aqui de propósito: negada ou concedida, os dois componentes
+   * são chamados do mesmo jeito e cada um verifica a permissão que lhe interessa. O
+   * `DatSessionController` publica `RegistroFalhou` quando falta `BLUETOOTH_CONNECT` — assim
+   * a falha aparece como estado `Erro` no painel, e não como um app parado em `Ocioso` sem
+   * explicação. O `ReconhecedorDeComando` apenas não escuta quando falta `RECORD_AUDIO`
+   * (design.md - Decisão 6): o painel de dev continua dirigindo o fluxo por toque.
    */
   private val permissionLauncher =
       registerForActivityResult(RequestMultiplePermissions()) {
         container.datSessionController.iniciar(this)
+        container.reconhecedorDeComando.iniciar()
       }
 
   override fun onCreate(savedInstanceState: Bundle?) {
@@ -52,17 +55,25 @@ class MainActivity : ComponentActivity() {
 
   override fun onStart() {
     super.onStart()
-    // `iniciar` é idempotente, então repetir isso a cada volta ao primeiro plano não
-    // reinicia uma sessão viva.
-    permissionLauncher.launch(PERMISSOES_DAT)
+    // Ambos os `iniciar` são idempotentes, então repetir isso a cada volta ao primeiro plano
+    // não reinicia uma sessão viva nem reabre o microfone.
+    permissionLauncher.launch(PERMISSOES)
+  }
+
+  override fun onStop() {
+    super.onStop()
+    // Solta o microfone enquanto o app está em segundo plano: segurá-lo impediria outros apps
+    // de gravar e queimaria bateria à toa (doc §8). A sessão DAT, ao contrário, é de escopo de
+    // processo (doc §2.3) e continua viva de propósito.
+    container.reconhecedorDeComando.parar()
   }
 
   private companion object {
     /**
-     * `BLUETOOTH_CONNECT` é a única que precisa ser pedida em runtime aqui. `BLUETOOTH` e
-     * `INTERNET` do manifesto são de instalação, e `CAMERA`/`RECORD_AUDIO` serão pedidas
-     * pelas fatias de visão e áudio, no momento em que forem usadas.
+     * `BLUETOOTH` e `INTERNET` do manifesto são de instalação e não aparecem aqui. `CAMERA`
+     * será pedida pela fatia de visão, no momento em que for usada.
      */
-    val PERMISSOES_DAT = arrayOf(Manifest.permission.BLUETOOTH_CONNECT)
+    val PERMISSOES =
+        arrayOf(Manifest.permission.BLUETOOTH_CONNECT, Manifest.permission.RECORD_AUDIO)
   }
 }
