@@ -1,0 +1,51 @@
+# Calibração de bancada do pipeline de visão — ver AjustesVisao.kt.
+#
+# Este arquivo NÃO é lido do repositório. Ele é um modelo para empurrar ao aparelho:
+#
+#   adb push AgvPickVoice/ajustes-visao.properties.exemplo \
+#     /sdcard/Android/data/com.agvtronic.pickvoice/files/ajustes-visao.properties
+#   adb shell am force-stop com.agvtronic.pickvoice
+#
+# Os ajustes são lidos uma vez, na inicialização do app — daí o force-stop.
+# Sem o arquivo no aparelho, valem exatamente os valores abaixo, que são os defaults
+# de produção. Toda chave é opcional: o que faltar mantém o default.
+#
+# Para voltar ao comportamento padrão, basta apagar o arquivo do aparelho:
+#   adb shell rm /sdcard/Android/data/com.agvtronic.pickvoice/files/ajustes-visao.properties
+
+# Fração central do quadro retida antes de qualquer decodificação (doc §6.3).
+# O quadro completo é liberado logo depois do recorte, então NÃO existe segunda tentativa
+# com outro recorte sobre o mesmo frame — é por isso que o valor é 60% e não 40%.
+# Aceita (0,1]. Use 1.0 para medir quanto o recorte está custando em taxa de leitura.
+fatorRecorte=0.60
+
+# Resolução do stream: ALTA (720x1280), MEDIA (504x896) ou BAIXA (360x640) — doc §2.2.
+# MEDIA é o valor do doc §8. Resolução menor rende mais qualidade POR FRAME, porque a
+# compressão se adapta à banda do Bluetooth. Se o DataMatrix não decodificar, testar as
+# duas direções antes de concluir qualquer coisa.
+qualidade=MEDIA
+
+# Taxa de quadros. Valores aceitos pelo SDK: 2, 7, 15, 24, 30 (doc §2.2).
+# 7 é o valor do doc §8, escolhido por bateria e por qualidade por frame.
+fps=7
+
+# Rotação informada ao leitor de código: 0, 90, 180 ou 270.
+# A orientação do frame que chega do óculos não está verificada — no MockDeviceKit ela
+# depende de como o feed foi configurado. Se o logcat mostrar leitura zero com o código
+# claramente no centro do quadro, é o primeiro valor a varrer.
+rotacaoGraus=0
+
+# Formatos aceitos, separados por vírgula: CODE_128, DATA_MATRIX, EAN_13.
+# Restringir acelera a leitura. Code 128 é a etiqueta de expedição (doc §6.2), DataMatrix
+# é o risco alto do doc §15, EAN-13 é o campo `ean` do mock.
+formatos=CODE_128,DATA_MATRIX,EAN_13
+
+# Registra cada tentativa de decodificação com os campos do doc §4.5 (timestamp, passo da
+# cascata, método, tempo, resultado). É o insumo da calibração do §10.
+logTentativas=true
+
+# Quantos frames consecutivos precisam devolver o MESMO código antes de ele valer.
+# Nasceu de falso positivo medido em bancada: com 1 (o comportamento antigo), 3 de 5 leituras
+# vieram erradas, duas delas EAN-13 com dígito verificador válido. Com 2, foram 5 de 5 corretas
+# ao custo de ~1 tentativa a mais. Use 1 para medir de novo o lado inseguro do trade-off.
+confirmacoesDeLeitura=2

@@ -150,6 +150,18 @@ class PickingActorTest {
   }
 
   @Test
+  fun `a leitura pelo stream chega ao ator como um evento so`() = runTest {
+    // O caminho que a fatia de visão exercita de verdade: o ControladorDeVisao publica um
+    // único DecodificacaoConcluida a partir de EscaneandoProduto, sem CapturaDisparada antes.
+    val actor = atorDeTeste(PickingState.EscaneandoProduto(item))
+
+    actor.send(PickingEvent.DecodificacaoConcluida(GTIN))
+    advanceUntilIdle()
+
+    assertEquals(PickingState.ValidandoContraDados(item, GTIN), actor.state.value)
+  }
+
+  @Test
   fun `estado inicial e ocioso por padrao`() = runTest {
     val actor = atorDeTeste()
 

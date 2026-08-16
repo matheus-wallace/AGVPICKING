@@ -273,7 +273,7 @@ class MockPickingRepositoryTest {
     val comMock = descreverPrimeiraLinha(repositorio)
     val comOutra = descreverPrimeiraLinha(RepositorioAlternativo)
 
-    assertEquals("514702 @ 7204B0118D", comMock)
+    assertEquals("531884 @ 7204B0118D", comMock)
     assertEquals("999001 @ 0101A0001A", comOutra)
   }
 

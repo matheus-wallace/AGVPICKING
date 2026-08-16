@@ -9,6 +9,8 @@ import com.agvtronic.pickvoice.dat.DatSessionController
 import com.agvtronic.pickvoice.data.PickingRepository
 import com.agvtronic.pickvoice.data.mock.MockPickingRepository
 import com.agvtronic.pickvoice.domain.statemachine.PickingActor
+import com.agvtronic.pickvoice.vision.AjustesVisao
+import com.agvtronic.pickvoice.vision.ControladorDeVisao
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -98,4 +100,32 @@ class AppContainer(private val appContext: Context) {
    */
   val reconhecedorDeComando: ReconhecedorDeComando =
       ReconhecedorDeComando(appContext, fonteAudio, pickingActor, ajustesAsr)
+
+  /** Calibração do pipeline de visão (recorte, resolução, taxa de quadros), lida uma vez. */
+  private val ajustesVisao: AjustesVisao = AjustesVisao.carregar(appContext)
+
+  /**
+   * Escopo do controlador de visão, em [Dispatchers.Main] pelo mesmo motivo do [datScope]: quem
+   * ele observa é o SDK, e a câmera é ligada a partir da mesma sessão que o `datScope` mantém.
+   *
+   * O trabalho pesado não acontece aqui — a coleta dos frames vai para [Dispatchers.Default], a
+   * decodificação para a thread do codec e a leitura para a thread do ML Kit.
+   */
+  private val visaoScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+
+  /**
+   * O produtor de eventos por câmera.
+   *
+   * Recebe o `StateFlow` de sessão do [datSessionController] em vez de criar a própria: o doc
+   * §2.3 permite uma sessão por dispositivo, e uma segunda `createSession` falharia. Quem chama
+   * `iniciar` é a `MainActivity`, que é a única capaz de registrar o contrato de permissão do
+   * DAT.
+   */
+  val controladorDeVisao: ControladorDeVisao =
+      ControladorDeVisao(
+          actor = pickingActor,
+          sessoes = datSessionController.sessaoAtiva,
+          ajustes = ajustesVisao,
+          scope = visaoScope,
+      )
 }

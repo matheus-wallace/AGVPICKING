@@ -16,6 +16,9 @@ import com.meta.wearable.dat.core.session.DeviceSessionState
 import com.meta.wearable.dat.core.types.RegistrationState
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
@@ -74,9 +77,24 @@ class DatSessionController(
 
   /**
    * A sessão viva. Guardada para manter a referência forte enquanto ela existir e para ser o
-   * ponto de acoplamento das capabilities que virão (câmera, na fatia de visão).
+   * ponto de acoplamento das capabilities (câmera, a partir da fatia de visão).
    */
   private var sessao: DeviceSession? = null
+
+  private val _sessaoAtiva = MutableStateFlow<DeviceSession?>(null)
+
+  /**
+   * A sessão **pronta para receber capability**, ou `null` quando não há nenhuma.
+   *
+   * Só emite não-nulo enquanto a fase é [Fase.ATIVA]: uma sessão pausada, parada ou que ainda
+   * não subiu não aceita `addCamera`. Quem liga a câmera (`vision/ControladorDeVisao`) observa
+   * daqui em vez de criar a própria sessão — o doc §2.3 permite **uma sessão por dispositivo por
+   * vez**, e uma segunda tentativa falharia.
+   *
+   * Como toda reconexão cria uma sessão nova (`design.md` da mudança anterior - Decisão 4), a
+   * troca de referência aqui é o que avisa o consumidor de que a câmera antiga morreu junto.
+   */
+  val sessaoAtiva: StateFlow<DeviceSession?> = _sessaoAtiva.asStateFlow()
 
   /** Collectors da sessão corrente, cancelados em bloco quando ela é substituída. */
   private val jobsDaSessao = mutableListOf<Job>()
@@ -252,11 +270,15 @@ class DatSessionController(
       Fase.FALHOU -> return
     }
     fase = Fase.ATIVA
+    _sessaoAtiva.value = sessao
   }
 
   private fun aoPausar() {
     if (fase != Fase.ATIVA) return
     fase = Fase.PAUSADA
+    // Sessão pausada não aceita capability: quem estiver com a câmera ligada precisa saber
+    // disso pela mesma via por onde a pegou.
+    _sessaoAtiva.value = null
     // O SDK não diz se foram as hastes, a remoção ou o toque (doc §2.3) — ver o KDoc de
     // GatilhoPausaDat.NAO_ESPECIFICADO.
     actor.send(PickingEvent.PausaDat(GatilhoPausaDat.NAO_ESPECIFICADO))
@@ -265,6 +287,7 @@ class DatSessionController(
   private fun aoParar() {
     if (fase != Fase.ATIVA && fase != Fase.PAUSADA) return
     fase = Fase.PERDIDA
+    _sessaoAtiva.value = null
     actor.send(PickingEvent.ConexaoBluetoothPerdida)
 
     scope.launch {
@@ -279,6 +302,7 @@ class DatSessionController(
     jobsDaSessao.forEach { it.cancel() }
     jobsDaSessao.clear()
     sessao = null
+    _sessaoAtiva.value = null
   }
 
   private companion object {

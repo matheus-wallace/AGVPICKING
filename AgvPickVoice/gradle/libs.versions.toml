@@ -7,6 +7,7 @@ mwdat = "0.9.0"
 lifecycle = "2.10.0"
 coroutines = "1.10.2"
 vosk = "0.3.75"
+mlkitBarcode = "17.3.0"
 junit = "4.13.2"
 
 [libraries]
@@ -23,6 +24,10 @@ kotlinx-coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-cor
 # ASR local do doc §5. O grupo é `com.alphacephei`, não `org.vosk` — verificado no Maven
 # Central, junto com a dependência transitiva `net.java.dev.jna:jna` que o .aar puxa.
 vosk-android = { group = "com.alphacephei", name = "vosk-android", version.ref = "vosk" }
+# Leitura de código de barras do doc §6.3, passo 1 da cascata. `barcode-scanning` é a
+# distribuição **bundled** (o modelo vai dentro do APK); a variante `barcode-scanning-common`
+# via Play Services baixaria o modelo no primeiro uso e quebraria o requisito offline.
+mlkit-barcode-scanning = { group = "com.google.mlkit", name = "barcode-scanning", version.ref = "mlkitBarcode" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 
 [plugins]

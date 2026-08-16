@@ -115,6 +115,12 @@ private fun reduzirFluxoPrincipal(state: PickingState, event: PickingEvent): Pic
           when (event) {
             is PickingEvent.CapturaDisparada ->
                 PickingState.DecodificandoProduto(state.itemEmAndamento)
+            // Passo 1 da cascata: o próprio stream decodificou, então "acabou: sem foto, sem
+            // latência extra, sem gasto de bateria" (doc §6.2). Não passa por
+            // DecodificandoProduto porque não houve captura nenhuma a decodificar — aquele
+            // estado é do caminho de escalonamento por foto.
+            is PickingEvent.DecodificacaoConcluida ->
+                PickingState.ValidandoContraDados(state.itemEmAndamento, event.codigoLido)
             else -> state
           }
 

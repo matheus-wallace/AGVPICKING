@@ -36,6 +36,11 @@ import kotlinx.coroutines.withContext
  * **Nenhum valor abaixo veio de uma base real.** Todos foram inventados dentro desses
  * formatos; nenhum pedido, praça, produto, lote, UA ou endereço aqui existe em produção.
  *
+ * A **única exceção** é o `ean` da primeira linha da ordem `408176`, que é o código impresso
+ * na caixa física usada para testar a leitura por câmera. Ele não vem de base nenhuma — vem da
+ * embalagem, que é pública —, e precisa ser o valor de verdade porque é ele que a câmera lê.
+ * Todo o resto daquela linha (produto, partida, UA, endereço, quantidade) segue inventado.
+ *
  * Sem persistência entre execuções: a ordem reinicia a cada sessão (doc §1.3).
  */
 class MockPickingRepository : PickingRepository {
@@ -114,10 +119,10 @@ class MockPickingRepository : PickingRepository {
      * Detalhes que valem a pena notar porque exercitam comportamento real do fluxo:
      *
      * - A ordem `408176` tem **duas linhas no mesmo endereço** (`7204B0118D`, produtos
-     *   514702 e 514703). O WMS emite uma parada por linha, não por endereço — o mesmo
-     *   código de barras é pedido duas vezes seguidas, e isso é comportamento esperado, não
-     *   defeito. Se o protótipo agrupar endereços iguais, é decisão de produto e precisa ser
-     *   consciente.
+     *   531884 e 514703). O WMS emite uma parada por linha, não por endereço — o operador é
+     *   mandado duas vezes seguidas para a mesma posição, e isso é comportamento esperado,
+     *   não defeito. Se o protótipo agrupar endereços iguais, é decisão de produto e precisa
+     *   ser consciente.
      * - A ordem `408193` tem o **mesmo produto+partida em dois endereços** (produto 402118,
      *   partida 62204718: 14 + 106 = 120 unidades). É rateio de alocação, e a soma bater com
      *   o total pedido é o teste que distingue rateio de duplicata.
@@ -135,13 +140,18 @@ class MockPickingRepository : PickingRepository {
                 linhas =
                     listOf(
                         Linha(
-                            produto = "514702",
-                            descricao = "DIPIRONA SODICA 500MG COM 10 COMPRIMIDOS",
+                            produto = "531884",
+                            descricao = "LORATADINA 10MG COM 12 COMPRIMIDOS",
                             endereco =
                                 Endereco(cd = "72", setor = "04", andar = "B", predio = "118", rua = "D"),
                             senhaEndereco = "47",
-                            ean = "7896006310242",
-                            dun14 = "17896006310249",
+                            // ÚNICO valor real de todo o dataset, e de propósito: é o EAN impresso
+                            // na caixa física usada na bancada de visão (Loratamed, Cimed). A
+                            // primeira linha da primeira ordem é a que uma execução de bancada
+                            // alcança sem pular nada, então é aqui que o código lido pela câmera
+                            // precisa bater. Não trocar por um inventado sem trocar a caixa junto.
+                            ean = "7896523202204",
+                            dun14 = "17896523202201",
                             partida = "60318425",
                             serie = "1002478351",
                             validade = LocalDate.of(2027, 4, 30),

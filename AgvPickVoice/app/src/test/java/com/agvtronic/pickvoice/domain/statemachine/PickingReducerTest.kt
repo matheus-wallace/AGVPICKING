@@ -289,6 +289,33 @@ class PickingReducerTest {
   }
 
   @Test
+  fun `leitura pelo stream conclui o escaneamento sem passar por decodificando`() {
+    // Passo 1 da cascata (doc §6.2): o stream decodificou, então não houve foto — e sem foto
+    // não há o que "decodificar" num estado à parte.
+    val depois =
+        reduce(
+            PickingState.EscaneandoProduto(item),
+            PickingEvent.DecodificacaoConcluida("7896006200215"),
+        )
+
+    assertEquals(PickingState.ValidandoContraDados(item, "7896006200215"), depois)
+  }
+
+  @Test
+  fun `o caminho por foto continua passando por decodificando`() {
+    // A transição acima não pode ter atalhado o caminho de escalonamento do doc §6.3: quando o
+    // gatilho de captura dispara, o estado intermediário continua existindo — é ele que
+    // distingue "leu pelo stream" de "precisou de foto" no log de calibração do §4.5.
+    var estado: PickingState = PickingState.EscaneandoProduto(item)
+
+    estado = reduce(estado, PickingEvent.CapturaDisparada)
+    assertEquals(PickingState.DecodificandoProduto(item), estado)
+
+    estado = reduce(estado, PickingEvent.DecodificacaoConcluida("7896006200215"))
+    assertEquals(PickingState.ValidandoContraDados(item, "7896006200215"), estado)
+  }
+
+  @Test
   fun `falha de decodificacao cai para verificacao assistida`() {
     val depois =
         reduce(PickingState.DecodificandoProduto(item), PickingEvent.DecodificacaoFalhou)

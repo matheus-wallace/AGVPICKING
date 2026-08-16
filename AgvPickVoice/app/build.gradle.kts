@@ -58,6 +58,10 @@ dependencies {
   // pela dependência: o único modelo publicado no Maven Central é o de inglês.
   implementation(libs.vosk.android)
 
+  // ML Kit bundled — passo 1 da cascata de decodificação (doc §6.3). O modelo é empacotado
+  // no APK; nada é baixado em runtime, que é o que o §6.3 exige.
+  implementation(libs.mlkit.barcode.scanning)
+
   // MockDeviceKit only ships in debug builds — see app/src/debug/.../mockdevice/.
   // Never linked into release, so there is no risk of the mock UI reaching an operator device.
   debugImplementation(libs.mwdat.mockdevice)

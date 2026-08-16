@@ -12,6 +12,14 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.agvtronic.pickvoice.ui.devpanel.DevPanelScreen
 import com.agvtronic.pickvoice.ui.devpanel.DevPanelViewModel
+import com.meta.wearable.dat.core.Wearables
+import com.meta.wearable.dat.core.types.Permission
+import com.meta.wearable.dat.core.types.PermissionStatus
+import kotlin.coroutines.resume
+import kotlinx.coroutines.CancellableContinuation
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 class MainActivity : ComponentActivity() {
 
@@ -31,6 +39,35 @@ class MainActivity : ComponentActivity() {
       registerForActivityResult(RequestMultiplePermissions()) {
         container.datSessionController.iniciar(this)
         container.reconhecedorDeComando.iniciar()
+        container.controladorDeVisao.iniciar(::solicitarPermissaoDoDat)
+      }
+
+  /**
+   * A permissão de câmera **do óculos** é do DAT, não do Android, e concedê-la manda o operador
+   * para o app Meta AI.
+   *
+   * Fica aqui porque só uma `Activity` pode registrar o contrato, e é passada ao
+   * `ControladorDeVisao` como função — ele a solicita no momento em que a câmera é de fato
+   * necessária (primeira entrada em `EscaneandoProduto`), não na abertura do app. O `Mutex`
+   * segue o sample `CameraAccess`: duas solicitações simultâneas sobrescreveriam a continuação.
+   */
+  private var continuacaoDePermissao: CancellableContinuation<PermissionStatus>? = null
+  private val mutexDePermissao = Mutex()
+
+  private val permissaoDatLauncher =
+      registerForActivityResult(Wearables.RequestPermissionContract()) { resultado ->
+        val status = resultado.getOrDefault(PermissionStatus.Denied)
+        continuacaoDePermissao?.resume(status)
+        continuacaoDePermissao = null
+      }
+
+  private suspend fun solicitarPermissaoDoDat(permissao: Permission): PermissionStatus =
+      mutexDePermissao.withLock {
+        suspendCancellableCoroutine { continuacao ->
+          continuacaoDePermissao = continuacao
+          continuacao.invokeOnCancellation { continuacaoDePermissao = null }
+          permissaoDatLauncher.launch(permissao)
+        }
       }
 
   override fun onCreate(savedInstanceState: Bundle?) {
@@ -66,14 +103,29 @@ class MainActivity : ComponentActivity() {
     // de gravar e queimaria bateria à toa (doc §8). A sessão DAT, ao contrário, é de escopo de
     // processo (doc §2.3) e continua viva de propósito.
     container.reconhecedorDeComando.parar()
+    // Mesma razão para a câmera, com um agravante: ela é o maior consumo de bateria do óculos
+    // (doc §8), e deixá-la ligada em segundo plano contradiria a §9.2, que promete captura só
+    // nos estados de escaneamento. Também solta a referência à `Activity` que o solicitante de
+    // permissão captura.
+    container.controladorDeVisao.parar()
   }
 
   private companion object {
     /**
-     * `BLUETOOTH` e `INTERNET` do manifesto são de instalação e não aparecem aqui. `CAMERA`
-     * será pedida pela fatia de visão, no momento em que for usada.
+     * `BLUETOOTH` e `INTERNET` do manifesto são de instalação e não aparecem aqui.
+     *
+     * `CAMERA` **não é usada pelo app em release** — quem tem câmera é o óculos, e a permissão
+     * daquela câmera é do DAT, não do Android (`Wearables.checkPermissionStatus`). Ela é pedida
+     * porque em debug o MockDeviceKit transmite a câmera traseira do celular como se fosse o
+     * feed do óculos, que é como a fatia de visão é exercitada em bancada. Pedir sempre, em vez
+     * de só em debug, mantém `MainActivity` sem `BuildConfig.DEBUG` — mesma razão pela qual o
+     * bootstrap do dispositivo simulado vive em `src/debug/`.
      */
     val PERMISSOES =
-        arrayOf(Manifest.permission.BLUETOOTH_CONNECT, Manifest.permission.RECORD_AUDIO)
+        arrayOf(
+            Manifest.permission.BLUETOOTH_CONNECT,
+            Manifest.permission.RECORD_AUDIO,
+            Manifest.permission.CAMERA,
+        )
   }
 }
