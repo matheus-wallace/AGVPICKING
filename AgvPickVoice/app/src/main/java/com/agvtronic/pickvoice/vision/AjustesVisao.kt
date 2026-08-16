@@ -45,7 +45,7 @@ enum class FormatoCodigo {
  * o recorte, §8 para resolução e taxa de quadros).
  *
  * @property fatorRecorte fração central do quadro retida antes de qualquer decodificação (doc
- *   §6.3). 60% e não menos porque o descarte é precoce: com o quadro completo já liberado, não
+ *   §6.3). 80% para acomodar enquadramentos menos precisos: com o quadro completo já liberado, não
  *   existe segunda tentativa com outro recorte sobre o mesmo frame.
  * @property qualidade resolução do stream. `MEDIA` (504×896) é o que o doc §8 fixa — resolução
  *   menor rende **mais** qualidade por frame, porque a compressão se adapta à banda do Bluetooth
@@ -66,13 +66,21 @@ enum class FormatoCodigo {
  *   descobrir tarde que não havia nada no logcat para explicar uma falha.
  */
 data class AjustesVisao(
-    val fatorRecorte: Float = 0.60f,
+    val fatorRecorte: Float = 0.80f,
     val qualidade: QualidadeStream = QualidadeStream.MEDIA,
     val fps: Int = 7,
     val rotacaoGraus: Int = 0,
     val formatos: List<FormatoCodigo> = FORMATOS_PADRAO,
     val confirmacoesDeLeitura: Int = 2,
     val logTentativas: Boolean = true,
+    val capturaPorFotoAtiva: Boolean = true,
+    val limiarDetalhe: Float = 80f,
+    val limiarNitidez: Float = 120f,
+    val limiarEstabilidade: Float = 12f,
+    val quadrosEstaveisParaCaptura: Int = 3,
+    val cooldownCapturaMs: Int = 1_500,
+    val maxTentativasCaptura: Int = 3,
+    val timeoutOrientacaoMs: Int = 8_000,
 ) {
 
   companion object {
@@ -144,6 +152,43 @@ data class AjustesVisao(
                         }
                   },
           logTentativas = propriedades.booleano("logTentativas", padrao.logTentativas, avisar),
+          capturaPorFotoAtiva =
+              propriedades.booleano("capturaPorFotoAtiva", padrao.capturaPorFotoAtiva, avisar),
+          limiarDetalhe =
+              propriedades.decimalPositivo("limiarDetalhe", padrao.limiarDetalhe, avisar),
+          limiarNitidez =
+              propriedades.decimalPositivo("limiarNitidez", padrao.limiarNitidez, avisar),
+          limiarEstabilidade =
+              propriedades.decimalPositivo(
+                  "limiarEstabilidade",
+                  padrao.limiarEstabilidade,
+                  avisar,
+                  aceitaZero = true,
+              ),
+          quadrosEstaveisParaCaptura =
+              propriedades.inteiroPositivo(
+                  "quadrosEstaveisParaCaptura",
+                  padrao.quadrosEstaveisParaCaptura,
+                  avisar,
+              ),
+          cooldownCapturaMs =
+              propriedades.inteiroPositivo(
+                  "cooldownCapturaMs",
+                  padrao.cooldownCapturaMs,
+                  avisar,
+              ),
+          maxTentativasCaptura =
+              propriedades.inteiroPositivo(
+                  "maxTentativasCaptura",
+                  padrao.maxTentativasCaptura,
+                  avisar,
+              ),
+          timeoutOrientacaoMs =
+              propriedades.inteiroPositivo(
+                  "timeoutOrientacaoMs",
+                  padrao.timeoutOrientacaoMs,
+                  avisar,
+              ),
       )
     }
 
@@ -169,6 +214,26 @@ data class AjustesVisao(
       val bruto = getProperty(chave) ?: return padrao
       return bruto.trim().toFloatOrNull()
           ?: padrao.also { avisar("Valor inválido para $chave; mantendo $padrao") }
+    }
+
+    private fun Properties.decimalPositivo(
+        chave: String,
+        padrao: Float,
+        avisar: (String) -> Unit,
+        aceitaZero: Boolean = false,
+    ): Float {
+      val valor = decimal(chave, padrao, avisar)
+      val valido = if (aceitaZero) valor >= 0f else valor > 0f
+      return if (valido) valor else padrao.also { avisar("$chave fora do intervalo; usando $it") }
+    }
+
+    private fun Properties.inteiroPositivo(
+        chave: String,
+        padrao: Int,
+        avisar: (String) -> Unit,
+    ): Int {
+      val valor = inteiro(chave, padrao, avisar)
+      return if (valor > 0) valor else padrao.also { avisar("$chave precisa ser > 0; usando $it") }
     }
 
     private fun Properties.enumeracao(

@@ -1,5 +1,6 @@
 package com.agvtronic.pickvoice.vision
 
+import android.graphics.Bitmap
 import android.util.Log
 import com.google.android.gms.tasks.Tasks
 import com.google.mlkit.vision.barcode.BarcodeScanner
@@ -11,6 +12,9 @@ import java.io.Closeable
 import java.nio.ByteBuffer
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
+import kotlinx.coroutines.suspendCancellableCoroutine
 
 /**
  * O passo 1 da cascata do doc §6.3: ML Kit **bundled** sobre o recorte do frame do stream.
@@ -62,6 +66,38 @@ class LeitorDeCodigo(private val ajustes: AjustesVisao) : Closeable {
     }
   }
 
+  /** Analisa uma ROI de foto e sempre recicla o bitmap ao terminar. */
+  suspend fun lerFoto(recorte: Bitmap): TentativaDeLeitura =
+      suspendCancellableCoroutine { continuacao ->
+        if (encerrado) {
+          if (!recorte.isRecycled) recorte.recycle()
+          continuacao.cancel(IllegalStateException("Leitor encerrado"))
+          return@suspendCancellableCoroutine
+        }
+        val agendada =
+            runCatching {
+              executor.execute {
+                val inicio = System.nanoTime()
+                val resultado =
+                    runCatching {
+                      val entrada = InputImage.fromBitmap(recorte, 0)
+                      TentativaDeLeitura(
+                          codigo = decodificar(entrada),
+                          duracaoMs = (System.nanoTime() - inicio) / 1_000_000,
+                      )
+                    }
+                if (!recorte.isRecycled) recorte.recycle()
+                if (continuacao.isActive) {
+                  resultado.fold(continuacao::resume, continuacao::resumeWithException)
+                }
+              }
+            }
+        agendada.onFailure { erro ->
+          if (!recorte.isRecycled) recorte.recycle()
+          if (continuacao.isActive) continuacao.resumeWithException(erro)
+        }
+      }
+
   private fun decodificar(recorte: RecorteNv21): String? {
     val entrada =
         InputImage.fromByteBuffer(
@@ -71,6 +107,10 @@ class LeitorDeCodigo(private val ajustes: AjustesVisao) : Closeable {
             ajustes.rotacaoGraus,
             InputImage.IMAGE_FORMAT_NV21,
         )
+    return decodificar(entrada)
+  }
+
+  private fun decodificar(entrada: InputImage): String? {
     // `process` é assíncrono por API, mas já estamos numa thread própria e serializada — esperar
     // aqui mantém "um frame por vez" sem precisar de mais nenhuma sincronização. O timeout existe
     // porque um travamento do ML Kit não pode congelar a leitura para sempre.

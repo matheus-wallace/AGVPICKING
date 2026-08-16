@@ -14,6 +14,7 @@ import com.agvtronic.pickvoice.vision.ControladorDeVisao
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import java.io.File
 
 /**
  * Manual dependency container — constructor injection wired by hand, no Hilt.
@@ -127,5 +128,6 @@ class AppContainer(private val appContext: Context) {
           sessoes = datSessionController.sessaoAtiva,
           ajustes = ajustesVisao,
           scope = visaoScope,
+          diretorioTemporarioCapturas = File(appContext.cacheDir, "capturas-visao"),
       )
 }

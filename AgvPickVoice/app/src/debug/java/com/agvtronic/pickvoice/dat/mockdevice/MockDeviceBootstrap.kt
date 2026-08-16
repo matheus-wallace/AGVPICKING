@@ -141,6 +141,16 @@ private fun registrarHookDeDepuracao(context: Context, oculos: MockGlasses) {
                     .onFailure { Log.e(TAG, "Falha ao configurar o feed por URI", it) }
               }
             }
+            ACAO_FOTO_CAPTURADA -> {
+              val uri = intent.getStringExtra(EXTRA_URI)
+              if (uri.isNullOrBlank()) {
+                Log.e(TAG, "Hook de depuração: $ACAO_FOTO_CAPTURADA exige --es $EXTRA_URI <uri>")
+              } else {
+                runCatching { oculos.services.camera.setCapturedImage(Uri.parse(uri)) }
+                    .onSuccess { Log.d(TAG, "Hook de depuração: foto simulada configurada") }
+                    .onFailure { Log.e(TAG, "Falha ao configurar foto simulada", it) }
+              }
+            }
           }
         }
       }
@@ -152,6 +162,7 @@ private fun registrarHookDeDepuracao(context: Context, oculos: MockGlasses) {
         addAction(ACAO_DESPAREAR)
         addAction(ACAO_FEED_CAMERA)
         addAction(ACAO_FEED_VIDEO)
+        addAction(ACAO_FOTO_CAPTURADA)
       }
   // EXPORTED porque o emissor é o shell do adb, um processo externo.
   context.registerReceiver(receiver, filtro, Context.RECEIVER_EXPORTED)
@@ -174,6 +185,7 @@ private const val ACAO_DESPAREAR = "com.agvtronic.pickvoice.DEBUG_DESPAREAR_OCUL
  */
 private const val ACAO_FEED_CAMERA = "com.agvtronic.pickvoice.DEBUG_FEED_CAMERA"
 private const val ACAO_FEED_VIDEO = "com.agvtronic.pickvoice.DEBUG_FEED_VIDEO"
+private const val ACAO_FOTO_CAPTURADA = "com.agvtronic.pickvoice.DEBUG_FOTO_CAPTURADA"
 private const val EXTRA_URI = "uri"
 
 private const val TAG = "MockDeviceBootstrap"
