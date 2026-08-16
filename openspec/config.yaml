@@ -1,0 +1,68 @@
+schema: spec-driven
+
+# Project context (optional)
+# This is shown to AI when creating artifacts.
+# Add your tech stack, conventions, style guides, domain knowledge, etc.
+context: |
+  AGV Pick Voice — hands-free warehouse picking app, voice + camera guided,
+  built against the Meta Wearables Device Access Toolkit (Meta AI glasses).
+  Full spec: DOC-TECNICA-AGV-PICK-VOICE-v1.5.md (repo root) — read it before
+  drafting any proposal that touches a section it defines.
+
+  Stack: Kotlin native Android (new app, separate from an existing React
+  Native app), minSdk 31, Jetpack Compose, coroutines/Flow.
+  IA local: Vosk (ASR) + Silero VAD (ONNX Runtime) + ML Kit bundled + zxing-cpp.
+  IA em nuvem (exception paths only): VLM verification, LLM free-text report.
+
+  Architecture layers (package-by-layer at top, package-by-feature within ui/):
+    domain/   - pure Kotlin, no Android imports, unit-testable (state machine,
+                check digit, GS1 parsing)
+    data/     - PickingRepository interface + MockPickingRepository, models
+    audio/    - FonteAudio abstraction (AudioHfpOculos / AudioMicrofoneSimulado),
+                Silero VAD, Vosk recognizer, single audio thread + Channel actor
+    vision/   - camera stream, capture trigger, ROI crop, decode cascade, VLM
+    ui/       - one subfolder per screen: Screen + ViewModel + UiState (Compose)
+  DI is manual (constructor injection via one AppContainer) — no Hilt, kept
+  simple deliberately given limited team Kotlin experience and hackathon time.
+
+  Hard constraints from the doc, always respect these:
+    - Mock everything WMS-related (order/product/lot/address/user) in memory,
+      zero network calls for that layer. Never mock sensor/decode results.
+    - Vosk Recognizer and Silero OrtSession are not thread-safe — both live on
+      one dedicated audio thread only, never touched from the state machine
+      coroutine or UI.
+    - State machine is a single-actor: one Channel receives all events, one
+      coroutine processes them sequentially. No direct state writes.
+    - Camera only powers on in EscaneandoProduto and ConferenciaFinal states.
+    - Structured JSON logging is an architecture requirement from day one,
+      not an afterthought (transitions, ASR n-best, decode attempts, capture,
+      image-discard confirmation).
+    - Full frame is discarded immediately after ROI crop (60% center), before
+      any cascade step — never retained, never sent over network.
+
+  Timeline: real coding deadline is 18/09, ~4h of actual dev time that day.
+  Team: Matheus Wallace (DAT/session + audio pipeline), Paulo Henrique
+  (vision pipeline + capture trigger + mock dataset), Thiago Serra (data
+  realism, calibration, pitch). Critical path: DAT session -> HFP -> camera.
+
+# Per-artifact rules (optional)
+# Add custom rules for specific artifacts.
+# Example:
+#   rules:
+#     proposal:
+#       - Keep proposals under 500 words
+#       - Always include a "Non-goals" section
+#     tasks:
+#       - Break tasks into chunks of max 2 hours
+
+# Per-operation guidance (optional)
+# Add advisory guidance for how apply and archive work should be conducted.
+# This is separate from artifact rules above.
+# Example:
+#   operations:
+#     apply:
+#       guidance:
+#         - Keep test summaries concise
+#     archive:
+#       guidance:
+#         - Summarize the archive outcome before finishing
