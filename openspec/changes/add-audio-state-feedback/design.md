@@ -37,12 +37,16 @@ trocar a implementação por clips Piper sem alterar regras operacionais.
 `SaidaDeAudio` será uma interface pequena (`iniciar`, `falar`, `parar`, `fechar`).
 `SaidaTextToSpeechAndroid` é a implementação de debug/desenvolvimento: usa pt-BR,
 não persiste texto, trata inicialização assíncrona e expõe somente estado/erro pequeno
-para diagnóstico. A implementação Piper/HFP futura satisfará o mesmo contrato.
+para diagnóstico. Preserva a voz pt-BR padrão do motor Google quando ela existe
+(variante 3 no Galaxy de desenvolvimento); sem ela, seleciona a melhor voz pt-BR por
+qualidade, depois por disponibilidade local e latência. Uma implementação offline futura
+satisfará o mesmo contrato, mas Piper não é o candidato atual: o runtime ativo é GPL-3.0
+e não oferece integração Android oficial pronta.
 
 ### 2. Observador de estado fora do ator
 
-`ControladorDeFala` observa `PickingActor.state` com `distinctUntilChanged`, converte
-o estado no projetor e envia a mensagem à saída. Ele nunca envia eventos ao ator nem
+`ControladorDeFala` observa o `StateFlow` de `PickingActor.state`, que já suprime valores
+iguais, converte o estado no projetor e envia a mensagem à saída. Ele nunca envia eventos ao ator nem
 altera estado. A mensagem inclui somente informação que já está no estado atual, como
 endereço e quantidade; nunca inclui o valor esperado de check digit.
 
@@ -91,5 +95,5 @@ controlador de processo e não é apagado por recomposição de Compose.
 
 ## Migration Plan
 
-Não há dados persistidos. A futura saída Piper/HFP substitui apenas a fiação de
+Não há dados persistidos. Uma futura saída offline/HFP substitui apenas a fiação de
 `SaidaDeAudio` no `AppContainer`; projetor, prioridades e observadores permanecem.

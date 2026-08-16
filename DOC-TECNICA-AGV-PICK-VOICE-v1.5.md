@@ -1,7 +1,7 @@
 # AGV Pick Voice — Documentação Técnica de Desenvolvimento
 
 **Equipe AGVTronic** · AI Glasses Brasil 2026 · Trilha Produtividade
-**Versão 1.5** — 15/08/2026
+**Versão 1.6** — 16/08/2026
 
 > Documento **interno de engenharia**. A Entrega Final de 22/08 usa o template
 > obrigatório da organização — este documento alimenta aquele, não o substitui.
@@ -9,6 +9,12 @@
 > **Mudança v1.4 → v1.5:** abstração da fonte de áudio para tornar o pipeline
 > de voz testável antes de 18/09, log estruturado como requisito de arquitetura,
 > plano de desenvolvimento de agosto, e carregamento antecipado do modelo Vosk.
+
+> **Mudança v1.5 → v1.6:** saída de áudio orientada ao estado implementada com
+> `TextToSpeech` Android em pt-BR; preserva a voz padrão do Google configurada
+> no aparelho (variante 3 no Galaxy de desenvolvimento) e só faz seleção por
+> qualidade/latência como fallback. Piper deixa de ser decisão de implementação:
+> o runtime ativo é GPL-3.0 e não possui integração Android oficial pronta.
 
 > **Mudança v1.3 → v1.4:** descarte do quadro completo imediatamente após o
 > recorte (60% centrais), com a cascata operando apenas sobre a região retida.
@@ -78,7 +84,8 @@ tem que ser uma falha real.
 | STT | Vosk small pt-BR com gramática dinâmica |
 | VAD / endpointing | Silero VAD via ONNX Runtime, endpointing próprio |
 | Leitura de código | ML Kit **bundled** + zxing-cpp em cascata |
-| TTS | Inventário pré-renderizado com Piper (build time) + concatenação |
+| TTS de desenvolvimento | `TextToSpeech` Android pt-BR; voz padrão do Google, com fallback de qualidade/latência |
+| TTS de produção | A definir: engine offline com licença permissiva e integração Android validada |
 | IA local (laço crítico) | Vosk (ASR) + ML Kit (visão) + Silero (VAD) |
 | IA em nuvem (exceção) | VLM para verificação visual; LLM para relato livre |
 
@@ -357,9 +364,22 @@ voz trava na frente do usuário. Manter em memória pela vida do processo; só o
 
 ### 5.4 Saída
 
-Inventário de ~150 fragmentos pré-renderizados com Piper (`pt_BR-faber-medium`),
-processados offline para 8 kHz: band-pass 300–3400 Hz, compressão de dinâmica,
-normalização de loudness, velocidade 1,15–1,25x.
+**Implementado no desenvolvimento.** `ControladorDeFala` projeta estados de picking e o
+sinal de orientação da visão em `MensagemFalavel`; a porta `SaidaDeAudio` mantém o
+projeto de mensagens independente do motor. `SaidaTextToSpeechAndroid` inicializa de
+forma assíncrona, fala em pt-BR, enfileira rotinas, preempta alertas críticos e fecha o
+motor no background.
+
+No Galaxy de desenvolvimento, a voz padrão pt-BR do Google — configurada como
+**variante 3** — é preservada. O código não grava o nome interno da voz, pois ele varia
+entre versões do motor: quando essa voz não existe, escolhe a voz pt-BR de maior
+qualidade declarada pelo Android; em empate, prefere a local e de menor latência.
+Assim, mensagens com endereço e quantidade continuam dinâmicas.
+
+**Não usar Piper nesta versão.** O modelo pt-BR médio adicionaria cerca de 63 MB, o
+runtime mantido é GPL-3.0 e não há binding Android oficial pronto. Qualquer rota offline
+futura precisa primeiro escolher um engine permissivo, com suporte Android e medição no
+hardware junto de Vosk e visão.
 
 **Convenção "meia" = 6 na entrada e na saída.** O jargão telefônico brasileiro
 criou isso porque "seis" e "três" se confundem em banda estreita — exatamente o
@@ -795,8 +815,9 @@ Isso expõe cedo os problemas que só aparecem na junção — ordem de HFP e c�
 vem depois.
 
 **Marco 2 — profundidade por componente.** Cascata de visão completa (§6.3),
-gramáticas e perfis de endpoint (§5.1), inventário TTS (§5.4), tratamento de
-exceção.
+gramáticas e perfis de endpoint (§5.1), validação em aparelho da saída TTS (§5.4) e
+tratamento de exceção. Uma alternativa offline só entra após análise de licença,
+integração Android e desempenho.
 
 **Marco 3 — instrumento de calibração.** Modo calibração da tela espelho (§12)
 rodando o corpus e despejando métricas. Precisa estar pronto **antes** de 18/09,
@@ -855,7 +876,9 @@ não estava realmente completo.
 - [ ] **Todos os membros do release channel com conta Meta já criada**
 - [ ] Firmware dos óculos ≥ v125
 - [ ] Modelo Vosk small pt-BR empacotado em `assets/`
-- [ ] Inventário TTS gerado e processado para 8 kHz
+- [x] Saída TTS Android pt-BR integrada ao estado, com fila, preempção e fallback de voz
+- [ ] No Galaxy, validar a variante 3 do Google, preempção e retorno do background
+- [ ] Escolher engine offline futuro somente após análise de licença, Android e desempenho
 - [ ] Confirmar template da Entrega Final com a organização
 - [ ] Dataset mockado estruturalmente realista + caixas físicas para a demo
 - [ ] **Etiquetas de check digit impressas e coladas** nas posições da demo —
