@@ -5,6 +5,9 @@ import com.agvtronic.pickvoice.audio.AjustesAsr
 import com.agvtronic.pickvoice.audio.AudioMicrofoneSimulado
 import com.agvtronic.pickvoice.audio.FonteAudio
 import com.agvtronic.pickvoice.audio.ReconhecedorDeComando
+import com.agvtronic.pickvoice.audio.output.ControladorDeFala
+import com.agvtronic.pickvoice.audio.output.SaidaDeAudio
+import com.agvtronic.pickvoice.audio.output.SaidaTextToSpeechAndroid
 import com.agvtronic.pickvoice.dat.DatSessionController
 import com.agvtronic.pickvoice.data.PickingRepository
 import com.agvtronic.pickvoice.data.mock.MockPickingRepository
@@ -129,5 +132,20 @@ class AppContainer(private val appContext: Context) {
           ajustes = ajustesVisao,
           scope = visaoScope,
           diretorioTemporarioCapturas = File(appContext.cacheDir, "capturas-visao"),
+      )
+
+  /** Saída substituível: TTS local nesta fatia, Piper/HFP quando essa rota existir. */
+  val saidaDeAudio: SaidaDeAudio = SaidaTextToSpeechAndroid(appContext)
+
+  /**
+   * Observador de processo que transforma estado e orientação de visão em fala. O controlador
+   * apenas lê os fluxos: não publica eventos e não conhece pixels.
+   */
+  val controladorDeFala: ControladorDeFala =
+      ControladorDeFala(
+          actor = pickingActor,
+          diagnosticoVisao = controladorDeVisao.diagnostico,
+          saida = saidaDeAudio,
+          scope = datScope,
       )
 }

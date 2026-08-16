@@ -2,6 +2,7 @@ package com.agvtronic.pickvoice.ui.devpanel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.agvtronic.pickvoice.audio.output.DiagnosticoSaidaAudio
 import com.agvtronic.pickvoice.data.PickingRepository
 import com.agvtronic.pickvoice.data.model.Linha
 import com.agvtronic.pickvoice.data.model.Ordem
@@ -33,17 +34,19 @@ import kotlinx.coroutines.launch
 class DevPanelViewModel(
     private val actor: PickingActor,
     private val repository: PickingRepository,
+    diagnosticoAudio: StateFlow<DiagnosticoSaidaAudio>,
 ) : ViewModel() {
 
   private val ordemFlow = MutableStateFlow<Ordem?>(null)
 
   val uiState: StateFlow<DevPanelUiState> =
-      combine(actor.state, ordemFlow) { estado, ordem ->
+      combine(actor.state, ordemFlow, diagnosticoAudio) { estado, ordem, audio ->
             DevPanelUiState(
                 estado = estado,
                 ordem = ordem,
                 linhaEmAndamento = linhaDe(estado, ordem),
                 acoes = acoesPara(estado, ordem),
+                diagnosticoAudio = audio,
             )
           }
           .stateIn(

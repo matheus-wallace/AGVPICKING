@@ -41,6 +41,7 @@ class MainActivity : ComponentActivity() {
         container.datSessionController.iniciar(this)
         container.reconhecedorDeComando.iniciar()
         container.controladorDeVisao.iniciar(::solicitarPermissaoDoDat)
+        container.controladorDeFala.iniciar()
       }
 
   /**
@@ -76,7 +77,13 @@ class MainActivity : ComponentActivity() {
 
     // DI manual, mesma convenção do AppContainer — sem Hilt (design.md - Decisions).
     val factory = viewModelFactory {
-      initializer { DevPanelViewModel(container.pickingActor, container.pickingRepository) }
+      initializer {
+        DevPanelViewModel(
+            container.pickingActor,
+            container.pickingRepository,
+            container.controladorDeFala.diagnostico,
+        )
+      }
       initializer { MirrorViewModel(container.controladorDeVisao) }
     }
 
@@ -110,6 +117,9 @@ class MainActivity : ComponentActivity() {
     // nos estados de escaneamento. Também solta a referência à `Activity` que o solicitante de
     // permissão captura.
     container.controladorDeVisao.parar()
+    // Cancela qualquer instrução em curso e libera o motor TTS. A deduplicação permanece no
+    // controlador, portanto voltar ao app não repete a última mensagem do mesmo estado.
+    container.controladorDeFala.parar()
   }
 
   private companion object {

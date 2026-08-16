@@ -40,6 +40,8 @@ fun DevPanelScreen(
     cabecalho()
     CartaoEstado(uiState)
     Spacer(Modifier.height(12.dp))
+    CartaoAudio(uiState)
+    Spacer(Modifier.height(12.dp))
     CartaoItem(uiState)
     Spacer(Modifier.height(16.dp))
 
@@ -58,6 +60,28 @@ fun DevPanelScreen(
           }
         }
         Spacer(Modifier.height(16.dp))
+      }
+    }
+  }
+}
+
+@Composable
+private fun CartaoAudio(uiState: DevPanelUiState) {
+  Card(Modifier.fillMaxWidth()) {
+    Column(Modifier.padding(16.dp)) {
+      Text("Saída de áudio", style = MaterialTheme.typography.labelMedium)
+      Text(uiState.diagnosticoAudio.estado.name)
+      Text(
+          "Última chave: ${uiState.diagnosticoAudio.ultimaChaveMensagem ?: "—"}",
+          style = MaterialTheme.typography.bodySmall,
+          fontFamily = FontFamily.Monospace,
+      )
+      uiState.diagnosticoAudio.categoriaErro?.let { erro ->
+        Text(
+            "Erro: ${erro.name}",
+            style = MaterialTheme.typography.bodySmall,
+            fontFamily = FontFamily.Monospace,
+        )
       }
     }
   }

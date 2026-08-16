@@ -1,5 +1,6 @@
 package com.agvtronic.pickvoice.ui.devpanel
 
+import com.agvtronic.pickvoice.audio.output.DiagnosticoSaidaAudio
 import com.agvtronic.pickvoice.data.model.Linha
 import com.agvtronic.pickvoice.data.model.Ordem
 import com.agvtronic.pickvoice.domain.statemachine.PickingEvent
@@ -17,6 +18,7 @@ data class DevPanelUiState(
     val ordem: Ordem? = null,
     val linhaEmAndamento: Linha? = null,
     val acoes: List<AcaoDev> = emptyList(),
+    val diagnosticoAudio: DiagnosticoSaidaAudio = DiagnosticoSaidaAudio(),
 ) {
   /** Nome curto do estado, o que o desenvolvedor lê de relance. */
   val nomeEstado: String
