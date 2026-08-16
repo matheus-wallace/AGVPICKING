@@ -1,6 +1,7 @@
 package com.agvtronic.pickvoice.vision
 
 import android.media.Image
+import android.os.SystemClock
 import android.util.Log
 import android.view.Surface
 import com.agvtronic.pickvoice.domain.statemachine.PickingActor
@@ -10,6 +11,7 @@ import com.meta.wearable.dat.camera.Camera
 import com.meta.wearable.dat.camera.Stream
 import com.meta.wearable.dat.camera.addCamera
 import com.meta.wearable.dat.camera.types.StreamConfiguration
+import com.meta.wearable.dat.camera.types.PhotoData
 import com.meta.wearable.dat.camera.types.VideoFrame
 import com.meta.wearable.dat.camera.types.VideoQuality
 import com.meta.wearable.dat.core.Wearables
@@ -17,9 +19,11 @@ import com.meta.wearable.dat.core.session.DeviceSession
 import com.meta.wearable.dat.core.types.Permission
 import com.meta.wearable.dat.core.types.PermissionStatus
 import java.util.concurrent.atomic.AtomicBoolean
+import java.io.File
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -27,6 +31,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * O produtor de eventos por câmera — passo 1 da cascata do doc §6.3.
@@ -43,7 +48,8 @@ import kotlinx.coroutines.launch
  * ```
  * Stream.videoStream (HEVC comprimido)
  *   -> DecodificadorHevc            (thread do codec)
- *   -> recorte de 60% para NV21     (mesma thread; libera a Image em seguida — doc §4.4)
+ *   -> recorte central configurável (80% por padrão) para NV21
+ *                                  (mesma thread; libera a Image em seguida — doc §4.4)
  *   -> LeitorDeCodigo / ML Kit      (thread do leitor)
  *   -> PickingActor.send(DecodificacaoConcluida)
  * ```
@@ -61,6 +67,7 @@ class ControladorDeVisao(
     private val sessoes: StateFlow<DeviceSession?>,
     private val ajustes: AjustesVisao,
     private val scope: CoroutineScope,
+    private val diretorioTemporarioCapturas: File? = null,
 ) {
 
   private val leitor = LeitorDeCodigo(ajustes)
@@ -70,6 +77,8 @@ class ControladorDeVisao(
    * leitura"). Confinado na thread do leitor, que é única.
    */
   private val consenso = ConsensoDeLeitura(ajustes.confirmacoesDeLeitura)
+  private val analisadorMetricas = AnalisadorMetricasCaptura()
+  private val gatilhoCaptura = GatilhoDeCaptura(ajustes)
 
   /**
    * `true` enquanto um recorte está no leitor. Frame que chega nesse meio-tempo é **descartado**,
@@ -77,9 +86,12 @@ class ControladorDeVisao(
    * é o caminho conhecido para estourar memória (design.md - Decisão 6).
    */
   private val analiseEmAndamento = AtomicBoolean(false)
+  private val capturaEmAndamento = AtomicBoolean(false)
 
   private var jobPrincipal: Job? = null
+  @Volatile private var jobCaptura: Job? = null
   private val jobsDoStream = mutableListOf<Job>()
+  @Volatile private var cicloEscaneamento = 0L
 
   private var camera: Camera? = null
   private var stream: Stream? = null
@@ -186,7 +198,26 @@ class ControladorDeVisao(
 
     jaPublicou = false
     analiseEmAndamento.set(false)
+    capturaEmAndamento.set(false)
     consenso.reiniciar()
+    analisadorMetricas.reiniciar()
+    gatilhoCaptura.reiniciar()
+    cicloEscaneamento++
+    diretorioTemporarioCapturas?.let { diretorio ->
+      scope.launch(Dispatchers.IO) {
+        val removidos = limparTemporariosDeCaptura(diretorio)
+        if (removidos > 0) Log.i(TAG, "PHOTO_CAPTURE_CLEANUP residuos=$removidos")
+      }
+    }
+    _diagnostico.update {
+      it.copy(
+          estadoCaptura = EstadoCapturaFoto.OCIOSA,
+          tentativasCaptura = 0,
+          quadrosEstaveis = 0,
+          ultimaMetricaCaptura = null,
+          orientacaoPendente = false,
+      )
+    }
 
     val novaCamera =
         sessao
@@ -258,13 +289,16 @@ class ControladorDeVisao(
   }
 
   private fun desligar() {
-    if (camera == null && jobsDoStream.isEmpty() && renderizador == null) {
+    if (camera == null && jobsDoStream.isEmpty() && renderizador == null && jobCaptura == null) {
       _diagnostico.update { it.copy(estadoStream = EstadoStreamVisao.DESLIGADO) }
       return
     }
 
     jobsDoStream.forEach { it.cancel() }
     jobsDoStream.clear()
+    cicloEscaneamento++
+    jobCaptura?.cancel()
+    jobCaptura = null
     pararRenderizador()
     decodificador?.parar()
     decodificador = null
@@ -274,6 +308,7 @@ class ControladorDeVisao(
     runCatching { camera?.close() }.onFailure { Log.w(TAG, "Falha ao fechar a câmera", it) }
     camera = null
     analiseEmAndamento.set(false)
+    capturaEmAndamento.set(false)
     _diagnostico.update {
       it.copy(
           estadoStream = EstadoStreamVisao.DESLIGADO,
@@ -331,7 +366,7 @@ class ControladorDeVisao(
    * (doc §4.4).
    */
   private fun aoFrameDecodificado(imagem: Image) {
-    if (jaPublicou) return
+    if (jaPublicou || capturaEmAndamento.get()) return
     // Descarta em vez de enfileirar enquanto o leitor está ocupado.
     if (!analiseEmAndamento.compareAndSet(false, true)) return
 
@@ -343,9 +378,13 @@ class ControladorDeVisao(
             }
             .getOrNull() ?: return
 
+    val metricas = analisadorMetricas.analisar(recorte)
+
     leitor.ler(recorte) { tentativa ->
       analiseEmAndamento.set(false)
-      _diagnostico.update { it.copy(ultimaTentativa = tentativa) }
+      _diagnostico.update {
+        it.copy(ultimaTentativa = tentativa, ultimaMetricaCaptura = metricas)
+      }
       // Uma leitura isolada não basta: só publica o que aparecer em frames consecutivos.
       val codigo = tentativa.codigo
       if (codigo != null) {
@@ -358,8 +397,131 @@ class ControladorDeVisao(
                 "tempoMs=${tentativa.duracaoMs}",
         )
         if (progresso.confirmado) publicar(codigo)
+      } else {
+        avaliarCaptura(metricas)
       }
     }
+  }
+
+  private fun avaliarCaptura(metricas: MetricasCaptura) {
+    if (jaPublicou || capturaEmAndamento.get()) return
+    val decisao = gatilhoCaptura.avaliar(metricas, SystemClock.elapsedRealtime())
+    _diagnostico.update {
+      it.copy(
+          estadoCaptura =
+              when {
+                decisao.capturar -> EstadoCapturaFoto.CAPTURANDO
+                decisao.emCooldown -> EstadoCapturaFoto.COOLDOWN
+                decisao.quadrosEstaveis > 0 -> EstadoCapturaFoto.ELEGIVEL
+                else -> EstadoCapturaFoto.OCIOSA
+              },
+          tentativasCaptura = decisao.tentativas,
+          quadrosEstaveis = decisao.quadrosEstaveis,
+          orientacaoPendente = it.orientacaoPendente || decisao.orientarOperador,
+      )
+    }
+    if (decisao.orientarOperador) {
+      Log.i(TAG, "PHOTO_CAPTURE_GUIDANCE mensagem=aponte_para_o_codigo_do_produto")
+    }
+    if (decisao.capturar) iniciarCaptura(decisao.tentativas)
+  }
+
+  private fun iniciarCaptura(numeroTentativa: Int) {
+    if (!capturaEmAndamento.compareAndSet(false, true)) return
+    val streamAtual = stream
+    if (streamAtual == null) {
+      capturaEmAndamento.set(false)
+      return
+    }
+    val ciclo = cicloEscaneamento
+    val inicio = SystemClock.elapsedRealtime()
+    Log.i(TAG, "PHOTO_CAPTURE_TRIGGERED tentativa=$numeroTentativa")
+    _diagnostico.update {
+      it.copy(
+          estadoCaptura = EstadoCapturaFoto.CAPTURANDO,
+          tentativasCaptura = numeroTentativa,
+          quadrosEstaveis = 0,
+      )
+    }
+
+    jobCaptura =
+        scope.launch {
+          var foto: PhotoData? = null
+          var codigo: String? = null
+          var categoriaErro: String? = null
+          try {
+            foto =
+                streamAtual
+                    .capturePhoto()
+                    .onFailure { erro, _ -> categoriaErro = erro.description }
+                    .getOrNull()
+            if (foto != null) {
+              val roi = withContext(Dispatchers.Default) { prepararRoiDaFoto(foto!!, ajustes.fatorRecorte) }
+              // O preparo já descartou a imagem completa. A partir daqui só a ROI existe.
+              foto = null
+              val tentativa = leitor.lerFoto(roi)
+              codigo = tentativa.codigo
+              _diagnostico.update { it.copy(ultimaTentativa = tentativa) }
+            }
+          } catch (cancelamento: CancellationException) {
+            throw cancelamento
+          } catch (erro: Throwable) {
+            categoriaErro = erro.javaClass.simpleName
+            Log.e(TAG, "Falha no fallback por foto: ${erro.message}")
+          } finally {
+            descartarFotoOriginal(foto)
+            capturaEmAndamento.set(false)
+            jobCaptura = null
+            Log.d(TAG, "PHOTO_CAPTURE_CLEANUP tentativa=$numeroTentativa")
+          }
+
+          // O resultado pertence ao ciclo que o iniciou. Uma saída de tela, queda de sessão ou
+          // leitura paralela do stream invalida silenciosamente qualquer retorno tardio.
+          if (ciclo != cicloEscaneamento || jaPublicou || actor.state.value !is PickingState.EscaneandoProduto) {
+            return@launch
+          }
+
+          val duracaoMs = SystemClock.elapsedRealtime() - inicio
+          Log.i(
+              TAG,
+              "PHOTO_CAPTURE_RESULT tentativa=$numeroTentativa tempoMs=$duracaoMs " +
+                  "resultado=${if (codigo != null) "codigo" else categoriaErro ?: "nada"}",
+          )
+          if (codigo != null) {
+            publicarFoto(checkNotNull(codigo))
+          } else {
+            val esgotou = gatilhoCaptura.registrarFracasso(SystemClock.elapsedRealtime())
+            _diagnostico.update {
+              it.copy(
+                  estadoCaptura =
+                      if (esgotou) EstadoCapturaFoto.ESGOTADA
+                      else if (categoriaErro != null) EstadoCapturaFoto.ERRO
+                      else EstadoCapturaFoto.COOLDOWN,
+                  detalheErro = categoriaErro ?: it.detalheErro,
+              )
+            }
+            if (esgotou) publicarEsgotamento()
+          }
+        }
+  }
+
+  private fun publicarFoto(codigo: String) {
+    if (jaPublicou) return
+    jaPublicou = true
+    Log.i(TAG, "BARCODE_CONFIRMADO codigo=$codigo origem=photo evento=DecodificacaoConcluida")
+    _diagnostico.update {
+      it.copy(ultimoCodigoConfirmado = codigo, estadoCaptura = EstadoCapturaFoto.CONFIRMADA)
+    }
+    actor.send(PickingEvent.CapturaDisparada)
+    actor.send(PickingEvent.DecodificacaoConcluida(codigo))
+  }
+
+  private fun publicarEsgotamento() {
+    if (jaPublicou) return
+    jaPublicou = true
+    Log.w(TAG, "PHOTO_CAPTURE_EXHAUSTED tentativas=${ajustes.maxTentativasCaptura}")
+    actor.send(PickingEvent.CapturaDisparada)
+    actor.send(PickingEvent.DecodificacaoFalhou)
   }
 
   private fun recortar(imagem: Image): RecorteNv21 {

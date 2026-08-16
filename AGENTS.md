@@ -1082,6 +1082,10 @@ Os marcadores relevantes são:
 
 - `BARCODE_DETECTADO codigo=<valor> consenso=<n>/<necessario>` — leitura bruta do ML Kit e progresso de confirmação;
 - `BARCODE_CONFIRMADO codigo=<valor> evento=DecodificacaoConcluida` — valor aceito e enviado ao ator.
+- `PHOTO_CAPTURE_TRIGGERED tentativa=<n>` — a ROI ficou nítida e estável após falha do stream;
+- `PHOTO_CAPTURE_RESULT tentativa=<n> tempoMs=<ms> resultado=<categoria>` — resultado sem conteúdo visual;
+- `PHOTO_CAPTURE_CLEANUP` — buffers da foto foram liberados;
+- `PHOTO_CAPTURE_EXHAUSTED tentativas=3` — três fotos sem leitura levaram à verificação assistida.
 
 Para a primeira linha mockada, o EAN esperado é `7896523202204`.
 
@@ -1091,6 +1095,8 @@ Para a primeira linha mockada, o EAN esperado é `7896523202204`.
 - O stream HEVC tem dois consumidores independentes: `DecodificadorHevc` sem `Surface` entrega `Image` YUV ao recorte/ML Kit; `RenderizadorHevc` entrega o mesmo HEVC diretamente a uma `Surface` para a tela espelho. Nunca troque o caminho de análise por uma `Surface`: o ML Kit precisa da saída YUV declarada.
 - O preview não usa `Bitmap`, não expõe pixels à UI e não grava imagens. A `Surface` pertence ao `SurfaceView`; o controlador só mantém uma referência enquanto ela é válida e nunca chama `Surface.release()`.
 - `DiagnosticoVisao` é o `StateFlow` sem pixels usado pela UI: estado do stream, resolução negociada, FPS/qualidade, última tentativa, último código confirmado e erro de preview.
+- O fallback por foto usa a mesma câmera e o mesmo ML Kit. Ele só chama `capturePhoto()` depois de três ROIs nítidas/estáveis sem leitura, mantém uma captura por vez, aplica cooldown de 1,5 s e encerra após três tentativas. A foto completa é recortada e reciclada antes de o ML Kit receber a ROI; nenhuma imagem vai para UI, log ou armazenamento. O recorte central padrão é 80% do frame (`fatorRecorte=0.80`) para tolerar enquadramento menos preciso.
+- `PhotoData.HEIC` precisa de orientação EXIF. Preserve o recorte orientado em `PreparadorFoto.kt` e não substitua o descarte determinístico por cache de arquivo.
 - A tela está em `ui/mirror/` e ainda envolve o `DevPanelScreen`, pois os botões temporários são necessários para levar o fluxo mockado até `EscaneandoProduto`.
 - `domain/` é Kotlin puro e seus testes rodam na JVM. Nunca importe APIs Android (inclusive `android.util.Log`) no ator, reducer ou consenso.
 
@@ -1108,4 +1114,12 @@ Já foram validados build, testes, lint, instalação no SM-G780F, fechamento/re
 2. medir uma etiqueta EAN física dentro e parcialmente fora da moldura;
 3. registrar se o segundo decodificador reduz a taxa de leitura ou causa travamento.
 
-A próxima proposta de visão mais natural, depois dessas medições, é o fallback de captura de foto (`capturePhoto`) para quando o stream não conseguir decodificar — mantenha a tela espelho e o caminho de stream funcionando de forma independente desse fallback.
+O fallback por foto está em `openspec/changes/add-photo-capture-decode-fallback/`. Para configurar uma foto no MockDeviceKit debug, com o app aberto:
+
+```bash
+adb shell am broadcast \
+  -a com.agvtronic.pickvoice.DEBUG_FOTO_CAPTURADA \
+  --es uri file:///sdcard/Download/etiqueta.jpg
+```
+
+Os limiares do gatilho ficam em `ajustes-visao.properties`: `capturaPorFotoAtiva`, `limiarDetalhe`, `limiarNitidez`, `limiarEstabilidade`, `quadrosEstaveisParaCaptura`, `cooldownCapturaMs`, `maxTentativasCaptura` e `timeoutOrientacaoMs`. Os valores ainda precisam de calibração com EAN físico nítido, borrado e em movimento; não ajuste constantes dentro do controlador.

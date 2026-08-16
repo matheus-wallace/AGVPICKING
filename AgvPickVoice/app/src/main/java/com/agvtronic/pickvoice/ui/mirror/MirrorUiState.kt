@@ -17,4 +17,10 @@ data class MirrorUiState(val diagnostico: DiagnosticoVisao) {
       val resultado = tentativa.codigo ?: "sem leitura"
       return "$resultado (${tentativa.duracaoMs} ms)"
     }
+
+  val captura: String
+    get() =
+        "${diagnostico.estadoCaptura} · tentativa ${diagnostico.tentativasCaptura}" +
+            if (diagnostico.quadrosEstaveis > 0) " · estável ${diagnostico.quadrosEstaveis}"
+            else ""
 }

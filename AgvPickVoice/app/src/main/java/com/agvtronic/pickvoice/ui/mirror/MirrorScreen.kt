@@ -95,8 +95,23 @@ private fun PreviewCard(
           "Último código: ${diagnostico.ultimoCodigoConfirmado ?: "nenhum"}",
           style = MaterialTheme.typography.bodySmall,
       )
+      Text("Captura: ${uiState.captura}", style = MaterialTheme.typography.bodySmall)
+      diagnostico.ultimaMetricaCaptura?.let { metrica ->
+        Text(
+            "Nitidez: ${metrica.varianciaLaplaciano.toInt()} · movimento: " +
+                (metrica.diferencaTemporalMedia?.let { "%.1f".format(it) } ?: "aguardando"),
+            style = MaterialTheme.typography.bodySmall,
+        )
+      }
+      if (diagnostico.orientacaoPendente) {
+        Text(
+            "Aponte para o código do produto",
+            color = MaterialTheme.colorScheme.primary,
+            style = MaterialTheme.typography.bodySmall,
+        )
+      }
       diagnostico.detalheErro?.let {
-        Text("Preview: $it", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+        Text("Visão: $it", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
       }
     }
   }

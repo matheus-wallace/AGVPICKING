@@ -39,7 +39,7 @@ data class RecorteNv21(
 /**
  * Recorta a região central do frame e devolve **só ela**, em NV21.
  *
- * Este é o passo que o doc §6.3 chama de obrigatório — "capturar → recortar 60% centrais →
+ * Este é o passo que o doc §6.3 chama de obrigatório — "capturar → recortar a região central →
  * descartar o quadro completo → rodar a cascata sobre o recorte" — e é também o que sustenta a
  * afirmação de privacidade do §9.2: depois desta função, quem chamou fecha a imagem original
  * (doc §4.4) e o quadro completo deixa de existir no processo. Nenhum passo de decodificação

@@ -82,6 +82,34 @@ class AjustesVisaoTest {
     assertEquals(QualidadeStream.ALTA, AjustesVisao.carregarDe(arquivoCom("qualidade=alta")).qualidade)
   }
 
+  @Test
+  fun `ajustes do fallback por foto podem ser calibrados por arquivo`() {
+    val ajustes =
+        AjustesVisao.carregarDe(
+            arquivoCom(
+                """
+                capturaPorFotoAtiva=false
+                limiarDetalhe=90.5
+                limiarNitidez=140
+                limiarEstabilidade=8.5
+                quadrosEstaveisParaCaptura=4
+                cooldownCapturaMs=2000
+                maxTentativasCaptura=2
+                timeoutOrientacaoMs=9000
+                """.trimIndent()
+            )
+        )
+
+    assertEquals(false, ajustes.capturaPorFotoAtiva)
+    assertEquals(90.5f, ajustes.limiarDetalhe, 1e-6f)
+    assertEquals(140f, ajustes.limiarNitidez, 1e-6f)
+    assertEquals(8.5f, ajustes.limiarEstabilidade, 1e-6f)
+    assertEquals(4, ajustes.quadrosEstaveisParaCaptura)
+    assertEquals(2_000, ajustes.cooldownCapturaMs)
+    assertEquals(2, ajustes.maxTentativasCaptura)
+    assertEquals(9_000, ajustes.timeoutOrientacaoMs)
+  }
+
   private fun arquivoCom(conteudo: String): File =
       pasta.newFile().apply { writeText(conteudo) }
 }

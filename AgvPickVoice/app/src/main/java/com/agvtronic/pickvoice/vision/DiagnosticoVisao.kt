@@ -8,6 +8,16 @@ enum class EstadoStreamVisao {
   ERRO,
 }
 
+enum class EstadoCapturaFoto {
+  OCIOSA,
+  ELEGIVEL,
+  CAPTURANDO,
+  COOLDOWN,
+  CONFIRMADA,
+  ESGOTADA,
+  ERRO,
+}
+
 /** Resultado de uma tentativa do ML Kit. Não contém imagem nem o recorte analisado. */
 data class TentativaDeLeitura(
     val codigo: String?,
@@ -29,5 +39,10 @@ data class DiagnosticoVisao(
     val alturaEfetiva: Int? = null,
     val ultimaTentativa: TentativaDeLeitura? = null,
     val ultimoCodigoConfirmado: String? = null,
+    val estadoCaptura: EstadoCapturaFoto = EstadoCapturaFoto.OCIOSA,
+    val tentativasCaptura: Int = 0,
+    val quadrosEstaveis: Int = 0,
+    val ultimaMetricaCaptura: MetricasCaptura? = null,
+    val orientacaoPendente: Boolean = false,
     val detalheErro: String? = null,
 )
