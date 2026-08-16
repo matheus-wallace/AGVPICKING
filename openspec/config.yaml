@@ -49,26 +49,14 @@ context: |
 # Add custom rules for specific artifacts.
 rules:
   proposal:
-    - Write all prose content in Brazilian Portuguese (pt-BR), matching
-      DOC-TECNICA-AGV-PICK-VOICE-v1.5.md. Keep the template's own section
-      headers in English (## Why, ## What Changes, ## Capabilities, etc.) —
-      only the written content underneath them is Portuguese.
+    - "Write all prose content in Brazilian Portuguese (pt-BR), matching DOC-TECNICA-AGV-PICK-VOICE-v1.5.md. Keep the template's own section headers in English (## Why, ## What Changes, ## Capabilities, etc.) - only the written content underneath them is Portuguese."
   specs:
-    - Write all prose content in Brazilian Portuguese (pt-BR). Keep the
-      OpenSpec structural markers in English exactly as templated (##
-      Purpose, ## ADDED/MODIFIED/REMOVED Requirements, "### Requirement:",
-      "#### Scenario:", **WHEN**, **THEN**) — translate requirement names,
-      descriptions, and scenario content, never the markers themselves.
-    - Use "DEVE"/"NÃO DEVE" as the Portuguese equivalent of SHALL/MUST for
-      normative requirement text.
+    - "Write all prose content in Brazilian Portuguese (pt-BR). Keep the OpenSpec structural markers in English exactly as templated (## Purpose, ## ADDED/MODIFIED/REMOVED Requirements,### Requirement:, #### Scenario:, WHEN, THEN) - translate requirement names, descriptions, and scenario content, never the markers themselves."
+    - 'Use DEVE/NAO DEVE as the Portuguese equivalent of SHALL/MUST for normative requirement text.'
   design:
-    - Write all prose content in Brazilian Portuguese (pt-BR). Keep the
-      template's section headers in English (## Context, ## Goals /
-      Non-Goals, ## Decisions, ## Risks / Trade-offs, ## Open Questions).
+    - "Write all prose content in Brazilian Portuguese (pt-BR). Keep the template's section headers in English (## Context, ## Goals / Non-Goals, ## Decisions, ## Risks / Trade-offs, ## Open Questions)."
   tasks:
-    - Write all task descriptions and group headings in Brazilian
-      Portuguese (pt-BR). Keep the checkbox syntax exactly as templated
-      ("- [ ] X.Y ...") — the apply phase parses it.
+    - "Write all task descriptions and group headings in Brazilian Portuguese (pt-BR). Keep the checkbox syntax exactly as templated (- [ ] X.Y ...) - the apply phase parses it."
 
 # Per-operation guidance (optional)
 # Add advisory guidance for how apply and archive work should be conducted.
