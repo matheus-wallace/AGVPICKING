@@ -15,5 +15,5 @@
 
 ## 4. Verificação
 
-- [ ] 4.1 Rodar `./gradlew assembleDebug` e `installDebug` a partir de `AgvPickVoice/`, instalar no dispositivo físico conectado, e confirmar visualmente que apertar os botões na ordem do fluxo principal (confirmar ordem → ... → concluir item) avança o texto de estado corretamente, e que o botão de emergência funciona a partir de qualquer estado operacional.
+- [x] 4.1 Rodar `./gradlew assembleDebug` e `installDebug` a partir de `AgvPickVoice/`, instalar no dispositivo físico conectado, e confirmar visualmente que apertar os botões na ordem do fluxo principal (confirmar ordem → ... → concluir item) avança o texto de estado corretamente, e que o botão de emergência funciona a partir de qualquer estado operacional.
 - [x] 4.2 Rodar `./gradlew testDebugUnitTest` a partir de `AgvPickVoice/` — confirma que nada em `domain/`/`data/` quebrou.
