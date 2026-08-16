@@ -50,7 +50,15 @@ class ConsensoDeLeitura(private val confirmacoes: Int = 2) {
    *   `true` enquanto o mesmo código seguir chegando — quem publica uma vez só é o chamador, que
    *   é também quem sabe o que é "um escaneamento".
    */
-  fun registrar(codigo: String): Boolean {
+  fun registrar(codigo: String): Boolean = registrarComProgresso(codigo).confirmado
+
+  /**
+   * Mesmo registro de [registrar], agora com dados suficientes para a telemetria de bancada.
+   *
+   * Não expõe frame algum; só o texto já retornado pelo leitor e a contagem do consenso.
+   */
+  fun registrarComProgresso(codigo: String): ProgressoDoConsenso {
+    val reiniciou = codigo != ultimoCodigo
     if (codigo == ultimoCodigo) {
       // Satura para não estourar o Int numa cena parada com o código no quadro.
       if (repeticoes < confirmacoes) repeticoes++
@@ -58,7 +66,13 @@ class ConsensoDeLeitura(private val confirmacoes: Int = 2) {
       ultimoCodigo = codigo
       repeticoes = 1
     }
-    return repeticoes >= confirmacoes
+    return ProgressoDoConsenso(
+        codigo = codigo,
+        repeticoes = repeticoes,
+        confirmacoesNecessarias = confirmacoes,
+        confirmado = repeticoes >= confirmacoes,
+        reiniciou = reiniciou,
+    )
   }
 
   /** Esquece o que foi lido. Chamado a cada novo escaneamento. */
@@ -67,3 +81,12 @@ class ConsensoDeLeitura(private val confirmacoes: Int = 2) {
     repeticoes = 0
   }
 }
+
+/** Resultado textual do consenso, útil para registrar a decisão sem guardar imagens. */
+data class ProgressoDoConsenso(
+    val codigo: String,
+    val repeticoes: Int,
+    val confirmacoesNecessarias: Int,
+    val confirmado: Boolean,
+    val reiniciou: Boolean,
+)

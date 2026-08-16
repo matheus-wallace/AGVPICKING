@@ -9,6 +9,7 @@ import android.os.Handler
 import android.os.HandlerThread
 import android.os.Process
 import android.util.Log
+import android.view.Surface
 import java.nio.ByteBuffer
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
@@ -27,11 +28,10 @@ import java.util.concurrent.TimeUnit
  *
  * ### O que muda em relação ao sample
  *
- * O sample renderiza direto numa `Surface` e deixa a GPU fazer YUV→RGB, porque o destino dele é
- * a tela. Aqui o destino é um leitor de código de barras, então o codec é configurado **sem
- * `Surface`** e com [MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420Flexible], o que permite
- * pedir a saída como [Image] via `getOutputImage`: planos, `rowStride` e `pixelStride`
- * declarados, sem adivinhação de layout.
+ * A instância de análise é configurada sem `Surface` e com
+ * [MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420Flexible], o que permite pedir a saída como
+ * [Image] via `getOutputImage`. Uma segunda instância pode receber [surface] e renderizar direto
+ * nela, como o sample, sem copiar o frame completo para o heap.
  *
  * Esse é o motivo de não usar `compressVideo = false` no `StreamConfiguration`: naquele caminho
  * o SDK decodifica internamente e repassa o `ByteBuffer` cru do codec, mas `VideoFrame` não
@@ -46,9 +46,21 @@ import java.util.concurrent.TimeUnit
  * prática, o recorte da ROI do doc §6.3) e não guardar a referência. Isso é o ponto de liberação
  * determinística que o doc §4.4 exige — o descarte não depende do coletor de lixo.
  *
- * @param aoDecodificar recebe cada frame decodificado, de forma síncrona.
+ * Exatamente um destino deve ser fornecido: [aoDecodificar] para análise ou [surface] para
+ * preview.
  */
-class DecodificadorHevc(private val aoDecodificar: (Image) -> Unit) {
+class DecodificadorHevc(
+    private val aoDecodificar: ((Image) -> Unit)? = null,
+    private val surface: Surface? = null,
+    private val aoFormato: (largura: Int, altura: Int) -> Unit = { _, _ -> },
+    private val aoErro: (String) -> Unit = {},
+) {
+
+  init {
+    require((aoDecodificar != null) xor (surface != null)) {
+      "Forneça exatamente um destino: callback YUV ou Surface"
+    }
+  }
 
   private class FrameDeEntrada(
       val dados: ByteBuffer,
@@ -88,13 +100,19 @@ class DecodificadorHevc(private val aoDecodificar: (Image) -> Unit) {
         MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_HEVC, largura, altura).apply {
           setInteger(MediaFormat.KEY_FRAME_RATE, TAXA_NOMINAL)
           setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 1)
-          setInteger(
-              MediaFormat.KEY_COLOR_FORMAT,
-              MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420Flexible,
-          )
+          if (surface == null) {
+            setInteger(
+                MediaFormat.KEY_COLOR_FORMAT,
+                MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420Flexible,
+            )
+          }
         }
     runCatching { garantirCodec() }
-        .onFailure { Log.e(TAG, "Falha ao criar o decodificador HEVC: ${it.message}", it) }
+        .onFailure {
+          val detalhe = "Falha ao criar o decodificador HEVC: ${it.message}"
+          Log.e(TAG, detalhe, it)
+          aoErro(detalhe)
+        }
   }
 
   /**
@@ -256,8 +274,7 @@ class DecodificadorHevc(private val aoDecodificar: (Image) -> Unit) {
       threadDoCodec = thread
 
       codecAtual.reset()
-      // surface = null: é o que habilita `getOutputImage` mais adiante.
-      codecAtual.configure(formato, null, null, 0)
+      codecAtual.configure(formato, surface, null, 0)
       codecAtual.setCallback(
           object : MediaCodec.Callback() {
             override fun onInputBufferAvailable(codec: MediaCodec, index: Int) =
@@ -271,17 +288,25 @@ class DecodificadorHevc(private val aoDecodificar: (Image) -> Unit) {
 
             override fun onError(codec: MediaCodec, e: MediaCodec.CodecException) {
               Log.e(TAG, "Erro do codec: ${e.message}", e)
+              aoErro(e.message ?: "Erro do codec HEVC")
             }
 
             override fun onOutputFormatChanged(codec: MediaCodec, format: MediaFormat) {
               Log.d(TAG, "Formato de saída negociado: $format")
+              val largura = format.getInteger(MediaFormat.KEY_WIDTH)
+              val altura = format.getInteger(MediaFormat.KEY_HEIGHT)
+              aoFormato(largura, altura)
             }
           },
           Handler(thread.looper),
       )
       codecAtual.start()
     }
-        .onFailure { Log.e(TAG, "Falha ao ativar o decodificador: ${it.message}", it) }
+        .onFailure {
+          val detalhe = "Falha ao ativar o decodificador: ${it.message}"
+          Log.e(TAG, detalhe, it)
+          aoErro(detalhe)
+        }
   }
 
   private fun aoReceberBufferDeEntrada(codec: MediaCodec, index: Int) {
@@ -334,6 +359,18 @@ class DecodificadorHevc(private val aoDecodificar: (Image) -> Unit) {
     // encerramento, e por isso este `return` fica antes do `try`.
     if (!ativo) return
 
+    if (surface != null) {
+      runCatching { codec.releaseOutputBuffer(index, info.size > 0) }
+          .onFailure {
+            if (ativo) {
+              val detalhe = "Erro ao renderizar preview: ${it.message}"
+              Log.e(TAG, detalhe, it)
+              aoErro(detalhe)
+            }
+          }
+      return
+    }
+
     try {
       if (info.size == 0) return
 
@@ -353,7 +390,7 @@ class DecodificadorHevc(private val aoDecodificar: (Image) -> Unit) {
       }
 
       // O `use` é o ponto de liberação do doc §4.4: a imagem fecha aqui, dê no que der.
-      imagem.use { aoDecodificar(it) }
+      imagem.use { aoDecodificar?.invoke(it) }
     } catch (e: Throwable) {
       Log.e(TAG, "Erro no buffer de saída: ${e.message}", e)
     } finally {

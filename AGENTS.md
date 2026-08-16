@@ -1056,3 +1056,56 @@ fun startDisplaySession(selectedDeviceId: DeviceIdentifier) {
 Build exactly one root view per `sendContent` call: use a root `flexBox { ... }` for UI, or a root `video(player = player)` for video. Do not put `video(...)` inside a `flexBox`. Button and clickable `flexBox` callbacks are routed back to the phone app; keep callbacks fast and delegate to app state or ViewModel methods. Use `IconName` enum values such as `IconName.GEAR`, not raw strings.
 
 For URL video, create `VideoPlayer(source = VideoSource.Url(...), codec = VideoCodec.MP4)`, send it with `display.sendContent { video(player = player) }`, and call `player.play()` after send success. Collect `player.state` and `player.error`; on `VideoPlayerState.ENDED`, cancel the video observer and send the next display screen. On cleanup, cancel state/error collection jobs, close or replace active video players, call `session.removeDisplay()`, then stop the session.
+
+## AGV Pick Voice — estado atual do aplicativo
+
+O app em desenvolvimento está em `AgvPickVoice/`. É um aplicativo Android Kotlin/Compose para separação farmacêutica, organizado nos pacotes `domain/`, `data/`, `audio/`, `vision/`, `dat/` e `ui/`. O WMS permanece integralmente mockado em memória; sensores e leitura óptica são reais via MockDeviceKit/câmera do celular durante o desenvolvimento.
+
+### Comandos de trabalho
+
+Execute a partir de `AgvPickVoice/`:
+
+```bash
+./gradlew testDebugUnitTest
+./gradlew assembleDebug
+./gradlew installDebug
+./gradlew lintDebug
+```
+
+O Samsung de desenvolvimento pode ser acessado por `adb`. Para acompanhar a leitura de código de barras durante um ciclo de separação:
+
+```bash
+adb logcat -v time -s ControladorDeVisao:I LeitorDeCodigo:I '*:S'
+```
+
+Os marcadores relevantes são:
+
+- `BARCODE_DETECTADO codigo=<valor> consenso=<n>/<necessario>` — leitura bruta do ML Kit e progresso de confirmação;
+- `BARCODE_CONFIRMADO codigo=<valor> evento=DecodificacaoConcluida` — valor aceito e enviado ao ator.
+
+Para a primeira linha mockada, o EAN esperado é `7896523202204`.
+
+### Arquitetura de visão
+
+- `ControladorDeVisao` é o único dono da capability de câmera. Ele cria a câmera somente em `PickingState.EscaneandoProduto` e a fecha ao sair desse estado, em `onStop` ou quando a sessão DAT termina.
+- O stream HEVC tem dois consumidores independentes: `DecodificadorHevc` sem `Surface` entrega `Image` YUV ao recorte/ML Kit; `RenderizadorHevc` entrega o mesmo HEVC diretamente a uma `Surface` para a tela espelho. Nunca troque o caminho de análise por uma `Surface`: o ML Kit precisa da saída YUV declarada.
+- O preview não usa `Bitmap`, não expõe pixels à UI e não grava imagens. A `Surface` pertence ao `SurfaceView`; o controlador só mantém uma referência enquanto ela é válida e nunca chama `Surface.release()`.
+- `DiagnosticoVisao` é o `StateFlow` sem pixels usado pela UI: estado do stream, resolução negociada, FPS/qualidade, última tentativa, último código confirmado e erro de preview.
+- A tela está em `ui/mirror/` e ainda envolve o `DevPanelScreen`, pois os botões temporários são necessários para levar o fluxo mockado até `EscaneandoProduto`.
+- `domain/` é Kotlin puro e seus testes rodam na JVM. Nunca importe APIs Android (inclusive `android.util.Log`) no ator, reducer ou consenso.
+
+### OpenSpec e próximos passos
+
+O plano/implementação da tela espelho está em `openspec/changes/add-vision-mirror-preview/`. Proposta, especificação, design e tarefas são válidos pelo comando:
+
+```bash
+openspec validate add-vision-mirror-preview --strict
+```
+
+Já foram validados build, testes, lint, instalação no SM-G780F, fechamento/reabertura em segundo plano, perda de sessão por despareamento e ausência de arquivos visuais persistidos. As tarefas que ainda exigem ação manual são:
+
+1. confirmar visualmente a imagem da câmera traseira e a moldura de ROI;
+2. medir uma etiqueta EAN física dentro e parcialmente fora da moldura;
+3. registrar se o segundo decodificador reduz a taxa de leitura ou causa travamento.
+
+A próxima proposta de visão mais natural, depois dessas medições, é o fallback de captura de foto (`capturePhoto`) para quando o stream não conseguir decodificar — mantenha a tela espelho e o caminho de stream funcionando de forma independente desse fallback.

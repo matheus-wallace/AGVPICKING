@@ -10,8 +10,9 @@ import androidx.compose.material3.Surface
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
-import com.agvtronic.pickvoice.ui.devpanel.DevPanelScreen
 import com.agvtronic.pickvoice.ui.devpanel.DevPanelViewModel
+import com.agvtronic.pickvoice.ui.mirror.MirrorScreen
+import com.agvtronic.pickvoice.ui.mirror.MirrorViewModel
 import com.meta.wearable.dat.core.Wearables
 import com.meta.wearable.dat.core.types.Permission
 import com.meta.wearable.dat.core.types.PermissionStatus
@@ -76,15 +77,16 @@ class MainActivity : ComponentActivity() {
     // DI manual, mesma convenção do AppContainer — sem Hilt (design.md - Decisions).
     val factory = viewModelFactory {
       initializer { DevPanelViewModel(container.pickingActor, container.pickingRepository) }
+      initializer { MirrorViewModel(container.controladorDeVisao) }
     }
 
     setContent {
       MaterialTheme {
         Surface {
-          // TODO(#mirror-screen): substituir pela navegação real (pareamento -> lista de
-          // ordens -> operação -> divergência) e pela tela espelho do doc §12. O painel de
-          // dev existe só enquanto voz e câmera não publicam eventos.
-          DevPanelScreen(viewModel = viewModel(factory = factory))
+          MirrorScreen(
+              viewModel = viewModel(factory = factory),
+              devPanelViewModel = viewModel(factory = factory),
+          )
         }
       }
     }

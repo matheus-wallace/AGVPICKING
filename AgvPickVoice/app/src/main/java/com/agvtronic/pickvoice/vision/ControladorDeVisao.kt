@@ -2,6 +2,7 @@ package com.agvtronic.pickvoice.vision
 
 import android.media.Image
 import android.util.Log
+import android.view.Surface
 import com.agvtronic.pickvoice.domain.statemachine.PickingActor
 import com.agvtronic.pickvoice.domain.statemachine.PickingEvent
 import com.agvtronic.pickvoice.domain.statemachine.PickingState
@@ -20,8 +21,11 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 /**
@@ -80,6 +84,20 @@ class ControladorDeVisao(
   private var camera: Camera? = null
   private var stream: Stream? = null
   private var decodificador: DecodificadorHevc? = null
+  @Volatile private var renderizador: RenderizadorHevc? = null
+  @Volatile private var surfacePreview: Surface? = null
+
+  private val _diagnostico =
+      MutableStateFlow(
+          DiagnosticoVisao(
+              qualidade = ajustes.qualidade,
+              fpsConfigurado = ajustes.fps,
+              fatorRecorte = ajustes.fatorRecorte,
+          )
+      )
+
+  /** Telemetria pequena e sem pixels consumida pela tela espelho. */
+  val diagnostico: StateFlow<DiagnosticoVisao> = _diagnostico.asStateFlow()
 
   /** Guarda para publicar no máximo um evento por escaneamento. */
   @Volatile private var jaPublicou = false
@@ -125,16 +143,44 @@ class ControladorDeVisao(
     desligar()
   }
 
+  /**
+   * Conecta a superfície pertencente à UI. A superfície não é liberada aqui: seu dono é o
+   * `SurfaceView`; o controlador guarda apenas a referência enquanto ela for válida.
+   */
+  fun anexarPreview(surface: Surface) {
+    if (surfacePreview === surface && renderizador != null) return
+    pararRenderizador()
+    surfacePreview = surface
+    if (camera != null && surface.isValid) iniciarRenderizador(surface)
+  }
+
+  /** Remove a saída visual sem interromper a câmera nem o leitor de código. */
+  fun removerPreview() {
+    surfacePreview = null
+    pararRenderizador()
+  }
+
   // -----------------------------------------------------------------------------------
   // Ciclo de vida do stream
   // -----------------------------------------------------------------------------------
 
   private suspend fun ligar(sessao: DeviceSession) {
     if (camera != null) return
+    _diagnostico.update {
+      it.copy(
+          estadoStream = EstadoStreamVisao.INICIANDO,
+          larguraEfetiva = null,
+          alturaEfetiva = null,
+          detalheErro = null,
+      )
+    }
     if (!temPermissaoDeCamera()) {
       // Degradação graciosa, mesma postura de `RECORD_AUDIO` na fatia de áudio: não existe
       // PickingEvent de "câmera indisponível", e o fluxo continua dirigível pelo painel de dev.
       Log.w(TAG, "Sem permissão de câmera do DAT; o escaneamento segue sem stream")
+      _diagnostico.update {
+        it.copy(estadoStream = EstadoStreamVisao.DESLIGADO, detalheErro = "Sem permissão de câmera")
+      }
       return
     }
 
@@ -163,6 +209,7 @@ class ControladorDeVisao(
     val novoDecodificador = DecodificadorHevc(::aoFrameDecodificado)
     novoDecodificador.iniciar(ajustes.qualidade.largura, ajustes.qualidade.altura)
     decodificador = novoDecodificador
+    surfacePreview?.takeIf { it.isValid }?.let(::iniciarRenderizador)
 
     // Assinar antes de start(), senão as primeiras transições e os primeiros frames passam
     // despercebidos — mesma ordem do sample CameraAccess e do DatSessionController.
@@ -188,18 +235,37 @@ class ControladorDeVisao(
           }
         }
     jobsDoStream +=
-        scope.launch { streamObservado.state.collect { Log.d(TAG, "StreamState = $it") } }
+        scope.launch {
+          streamObservado.state.collect { estado ->
+            Log.d(TAG, "StreamState = $estado")
+            _diagnostico.update {
+              it.copy(
+                  estadoStream = estadoDiagnostico(estado.toString()),
+                  detalheErro = if (estado.toString() == "STREAMING") null else it.detalheErro,
+              )
+            }
+          }
+        }
     jobsDoStream +=
         scope.launch {
-          streamObservado.errorStream.collect { Log.e(TAG, "Erro de stream: ${it.description}") }
+          streamObservado.errorStream.collect { erro ->
+            Log.e(TAG, "Erro de stream: ${erro.description}")
+            _diagnostico.update {
+              it.copy(estadoStream = EstadoStreamVisao.ERRO, detalheErro = erro.description)
+            }
+          }
         }
   }
 
   private fun desligar() {
-    if (camera == null && jobsDoStream.isEmpty()) return
+    if (camera == null && jobsDoStream.isEmpty() && renderizador == null) {
+      _diagnostico.update { it.copy(estadoStream = EstadoStreamVisao.DESLIGADO) }
+      return
+    }
 
     jobsDoStream.forEach { it.cancel() }
     jobsDoStream.clear()
+    pararRenderizador()
     decodificador?.parar()
     decodificador = null
     stream = null
@@ -208,7 +274,36 @@ class ControladorDeVisao(
     runCatching { camera?.close() }.onFailure { Log.w(TAG, "Falha ao fechar a câmera", it) }
     camera = null
     analiseEmAndamento.set(false)
+    _diagnostico.update {
+      it.copy(
+          estadoStream = EstadoStreamVisao.DESLIGADO,
+          larguraEfetiva = null,
+          alturaEfetiva = null,
+      )
+    }
     Log.i(TAG, "Stream de câmera encerrado")
+  }
+
+  private fun iniciarRenderizador(surface: Surface) {
+    if (!surface.isValid || camera == null) return
+    pararRenderizador()
+    val novo =
+        RenderizadorHevc(
+            surface = surface,
+            aoFormato = { largura, altura ->
+              _diagnostico.update {
+                it.copy(larguraEfetiva = largura, alturaEfetiva = altura, detalheErro = null)
+              }
+            },
+            aoErro = { detalhe -> _diagnostico.update { it.copy(detalheErro = detalhe) } },
+        )
+    novo.iniciar(ajustes.qualidade.largura, ajustes.qualidade.altura)
+    renderizador = novo
+  }
+
+  private fun pararRenderizador() {
+    renderizador?.parar()
+    renderizador = null
   }
 
   // -----------------------------------------------------------------------------------
@@ -217,7 +312,6 @@ class ControladorDeVisao(
 
   private fun aoFrameComprimido(frame: VideoFrame, decodificadorAtual: DecodificadorHevc) {
     if (!frame.isCompressed) return
-    if (jaPublicou) return
 
     val buffer = frame.buffer
     val posicaoOriginal = buffer.position()
@@ -225,7 +319,8 @@ class ControladorDeVisao(
     buffer.get(bytes)
     buffer.position(posicaoOriginal)
 
-    decodificadorAtual.enfileirar(bytes, frame.presentationTimeUs)
+    renderizador?.enfileirar(bytes, frame.presentationTimeUs)
+    if (!jaPublicou) decodificadorAtual.enfileirar(bytes, frame.presentationTimeUs)
   }
 
   /**
@@ -248,10 +343,22 @@ class ControladorDeVisao(
             }
             .getOrNull() ?: return
 
-    leitor.ler(recorte) { codigo ->
+    leitor.ler(recorte) { tentativa ->
       analiseEmAndamento.set(false)
+      _diagnostico.update { it.copy(ultimaTentativa = tentativa) }
       // Uma leitura isolada não basta: só publica o que aparecer em frames consecutivos.
-      if (codigo != null && consenso.registrar(codigo)) publicar(codigo)
+      val codigo = tentativa.codigo
+      if (codigo != null) {
+        val progresso = consenso.registrarComProgresso(codigo)
+        Log.i(
+            TAG,
+            "BARCODE_DETECTADO codigo=${progresso.codigo} " +
+                "consenso=${progresso.repeticoes}/${progresso.confirmacoesNecessarias} " +
+                "confirmado=${progresso.confirmado} reiniciou=${progresso.reiniciou} " +
+                "tempoMs=${tentativa.duracaoMs}",
+        )
+        if (progresso.confirmado) publicar(codigo)
+      }
     }
   }
 
@@ -273,7 +380,8 @@ class ControladorDeVisao(
     // evento — uma janela curta, mas suficiente para publicar em duplicata.
     if (jaPublicou) return
     jaPublicou = true
-    Log.i(TAG, "Código lido no stream: $codigo")
+    Log.i(TAG, "BARCODE_CONFIRMADO codigo=$codigo evento=DecodificacaoConcluida")
+    _diagnostico.update { it.copy(ultimoCodigoConfirmado = codigo) }
     actor.send(PickingEvent.DecodificacaoConcluida(codigo))
   }
 
@@ -309,6 +417,13 @@ class ControladorDeVisao(
           QualidadeStream.ALTA -> VideoQuality.HIGH
           QualidadeStream.MEDIA -> VideoQuality.MEDIUM
           QualidadeStream.BAIXA -> VideoQuality.LOW
+        }
+
+    fun estadoDiagnostico(nome: String): EstadoStreamVisao =
+        when (nome) {
+          "STARTING", "STARTED" -> EstadoStreamVisao.INICIANDO
+          "STREAMING" -> EstadoStreamVisao.ATIVO
+          else -> EstadoStreamVisao.DESLIGADO
         }
 
     fun Image.Plane.comoPlano(): PlanoImagem = PlanoImagem(buffer, rowStride, pixelStride)

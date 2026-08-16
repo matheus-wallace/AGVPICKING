@@ -35,12 +35,12 @@ class LeitorDeCodigo(private val ajustes: AjustesVisao) : Closeable {
 
   /**
    * Enfileira uma leitura na thread do leitor e chama [aoConcluir] **nela**, com o conteúdo lido
-   * ou `null`.
+   * (quando houver) e a duração da tentativa.
    *
    * O recorte já vem sem o quadro completo (ver [recortarParaNv21]): daqui para a frente o único
    * pixel que existe no processo é o da ROI.
    */
-  fun ler(recorte: RecorteNv21, aoConcluir: (String?) -> Unit) {
+  fun ler(recorte: RecorteNv21, aoConcluir: (TentativaDeLeitura) -> Unit) {
     if (encerrado) return
     executor.execute {
       if (encerrado) return@execute
@@ -58,7 +58,7 @@ class LeitorDeCodigo(private val ajustes: AjustesVisao) : Closeable {
         if (codigo != null) Log.i(TAG, mensagem) else Log.d(TAG, mensagem)
       }
 
-      aoConcluir(codigo)
+      aoConcluir(TentativaDeLeitura(codigo = codigo, duracaoMs = duracaoMs))
     }
   }
 

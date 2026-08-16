@@ -27,12 +27,17 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
  * repositório.
  */
 @Composable
-fun DevPanelScreen(viewModel: DevPanelViewModel, modifier: Modifier = Modifier) {
+fun DevPanelScreen(
+    viewModel: DevPanelViewModel,
+    modifier: Modifier = Modifier,
+    cabecalho: @Composable () -> Unit = {},
+) {
   val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
   Column(
       modifier = modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
   ) {
+    cabecalho()
     CartaoEstado(uiState)
     Spacer(Modifier.height(12.dp))
     CartaoItem(uiState)
