@@ -38,28 +38,23 @@ fun MirrorScreen(
     if (aoVoltarParaOperacao != null) {
       TextButton(onClick = aoVoltarParaOperacao) { Text("Voltar à operação") }
     }
-    PreviewCard(
-        uiState = uiState,
-        aoAnexar = viewModel::anexar,
-        aoRemover = viewModel::remover,
-    )
+    PreviewCard(uiState = uiState)
     Spacer(Modifier.height(12.dp))
   }
 }
 
+/**
+ * Só o diagnóstico de visão: a imagem em si mora na miniatura flutuante hospedada pela
+ * `MainActivity`, que sobrevive à troca de superfície. Prendê-la a este cartão significava
+ * perder posição e dispensa toda vez que o operador saía do painel.
+ */
 @Composable
-private fun PreviewCard(
-    uiState: MirrorUiState,
-    aoAnexar: (android.view.Surface) -> Unit,
-    aoRemover: () -> Unit,
-) {
+private fun PreviewCard(uiState: MirrorUiState) {
   val diagnostico = uiState.diagnostico
 
   Card(Modifier.fillMaxWidth()) {
     Column(Modifier.padding(12.dp)) {
       Text("Visão dos óculos", style = MaterialTheme.typography.titleMedium)
-      Spacer(Modifier.height(8.dp))
-      PreviaEspelho(diagnostico = diagnostico, aoAnexar = aoAnexar, aoRemover = aoRemover)
       Spacer(Modifier.height(8.dp))
       Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
         Text("Stream: ${diagnostico.estadoStream}", style = MaterialTheme.typography.bodySmall)

@@ -82,7 +82,7 @@ data class DecisaoCaptura(
     val tentativas: Int,
 )
 
-/** Máquina pura que aplica qualidade, estabilidade, cooldown e limite de capturas. */
+/** Máquina pura que aplica qualidade, estabilidade e cooldown antes de disparar uma captura. */
 class GatilhoDeCaptura(private val ajustes: AjustesVisao) {
   private var quadrosEstaveis = 0
   private var tentativas = 0
@@ -101,7 +101,6 @@ class GatilhoDeCaptura(private val ajustes: AjustesVisao) {
         ultimoFracassoMs?.let { agoraMs - it >= ajustes.cooldownCapturaMs } ?: true
     val elegivel =
         ajustes.capturaPorFotoAtiva &&
-            tentativas < ajustes.maxTentativasCaptura &&
             foraDoCooldown &&
             metricas.varianciaLaplaciano >= ajustes.limiarDetalhe &&
             metricas.varianciaLaplaciano >= ajustes.limiarNitidez &&
@@ -117,11 +116,15 @@ class GatilhoDeCaptura(private val ajustes: AjustesVisao) {
     return DecisaoCaptura(capturar, orientar, !foraDoCooldown, quadrosEstaveis, tentativas)
   }
 
-  /** @return `true` quando esta falha esgotou o ciclo. */
-  fun registrarFracasso(agoraMs: Long): Boolean {
+  /**
+   * Registra uma tentativa de captura sem código encontrado: aplica o cooldown e reinicia a
+   * sequência de estabilidade. Não há mais esgotamento — a câmera continua tentando até o
+   * operador escanear o produto ou reportar exceção por voz (spec: janela de câmera acomoda o
+   * tempo real do operador).
+   */
+  fun registrarFracasso(agoraMs: Long) {
     ultimoFracassoMs = agoraMs
     quadrosEstaveis = 0
-    return tentativas >= ajustes.maxTentativasCaptura
   }
 
   fun reiniciar() {

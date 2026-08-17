@@ -14,7 +14,6 @@ enum class EstadoCapturaFoto {
   CAPTURANDO,
   COOLDOWN,
   CONFIRMADA,
-  ESGOTADA,
   ERRO,
 }
 

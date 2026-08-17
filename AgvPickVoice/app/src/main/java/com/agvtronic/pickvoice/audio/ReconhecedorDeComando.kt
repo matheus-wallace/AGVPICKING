@@ -331,17 +331,21 @@ class ReconhecedorDeComando(
       return
     }
 
-    val intencao =
+    val resultado =
         publicador.publicar(escuta.solicitacao.estado, texto, escuta.solicitacao.versao)
 
     // Loga sempre, inclusive o descartado: é o insumo do plano de calibração do doc §10, que
     // precisa saber o que o ASR ouviu, não só o que virou evento. O check digit esperado
-    // nunca aparece aqui — quem o conhece é o ResolvedorDeIntencao, que não loga.
-    Log.i(
-        TAG,
-        "ASR[${nomeDoEstado(escuta.solicitacao.estado)}]: \"$texto\" -> " +
-            (intencao?.let { it::class.simpleName } ?: "descartado"),
-    )
+    // nunca aparece aqui — quem o conhece é o ResolvedorDeIntencao, que não loga. O motivo do
+    // descarte vem separado (task 2.2): fora da gramática do estado atual não é o mesmo sintoma
+    // de bancada que resultado de versão de estado obsoleta.
+    val desfecho =
+        when (resultado) {
+          is ResultadoDePublicacao.Aceito -> resultado.intencao::class.simpleName
+          ResultadoDePublicacao.ForaDaGramatica -> "descartado (fora da gramática)"
+          ResultadoDePublicacao.VersaoObsoleta -> "descartado (versão de estado obsoleta)"
+        }
+    Log.i(TAG, "ASR[${nomeDoEstado(escuta.solicitacao.estado)}]: \"$texto\" -> $desfecho")
   }
 
   /**

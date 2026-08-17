@@ -5,21 +5,26 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts.RequestMultiplePermissions
-import androidx.compose.material3.MaterialTheme
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.agvtronic.pickvoice.ui.devpanel.DevPanelViewModel
+import com.agvtronic.pickvoice.ui.mirror.MiniaturaDeCamera
 import com.agvtronic.pickvoice.ui.mirror.MirrorScreen
 import com.agvtronic.pickvoice.ui.mirror.MirrorViewModel
-import com.agvtronic.pickvoice.ui.mirror.PreviaEspelho
 import com.agvtronic.pickvoice.ui.operation.OperationScreen
 import com.agvtronic.pickvoice.ui.operation.OperationViewModel
+import com.agvtronic.pickvoice.ui.theme.AgvPickVoiceTheme
 import com.meta.wearable.dat.core.Wearables
 import com.meta.wearable.dat.core.types.Permission
 import com.meta.wearable.dat.core.types.PermissionStatus
@@ -103,7 +108,7 @@ class MainActivity : ComponentActivity() {
     }
 
     setContent {
-      MaterialTheme {
+      AgvPickVoiceTheme {
         Surface {
           // Os três ViewModels são resolvidos aqui, fora do `when`: eles vivem no
           // `ViewModelStore` da `Activity`, então alternar de superfície não recria nenhum
@@ -114,19 +119,34 @@ class MainActivity : ComponentActivity() {
           val devPanelViewModel: DevPanelViewModel = viewModel(factory = factory)
           var superficie by rememberSaveable { mutableStateOf(Superficie.OPERACAO) }
 
-          when (superficie) {
-            Superficie.OPERACAO ->
-                OperationScreen(
-                    viewModel = operationViewModel,
-                    previa = { PreviaEspelho(mirrorViewModel) },
-                    aoAbrirDebug = { superficie = Superficie.DEBUG },
-                )
-            Superficie.DEBUG ->
-                MirrorScreen(
-                    viewModel = mirrorViewModel,
-                    devPanelViewModel = devPanelViewModel,
-                    aoVoltarParaOperacao = { superficie = Superficie.OPERACAO },
-                )
+          // A miniatura da câmera é irmã do `when`, e não filha de uma das telas: hospedada
+          // aqui, ela sobrevive à troca de superfície e à troca de etapa, guardando posição e
+          // dispensa enquanto o stream estiver ativo. Dentro das telas, cada composição tinha o
+          // próprio `remember` e a miniatura voltava ao lugar de origem a cada passo.
+          BoxWithConstraints(Modifier.fillMaxSize()) {
+            val limiteLarguraPx = with(LocalDensity.current) { maxWidth.toPx() }
+            val limiteAlturaPx = with(LocalDensity.current) { maxHeight.toPx() }
+
+            when (superficie) {
+              Superficie.OPERACAO ->
+                  OperationScreen(
+                      viewModel = operationViewModel,
+                      aoAbrirDebug = { superficie = Superficie.DEBUG },
+                  )
+              Superficie.DEBUG ->
+                  MirrorScreen(
+                      viewModel = mirrorViewModel,
+                      devPanelViewModel = devPanelViewModel,
+                      aoVoltarParaOperacao = { superficie = Superficie.OPERACAO },
+                  )
+            }
+
+            MiniaturaDeCamera(
+                viewModel = mirrorViewModel,
+                limiteLarguraPx = limiteLarguraPx,
+                limiteAlturaPx = limiteAlturaPx,
+                modifier = Modifier.align(Alignment.BottomEnd),
+            )
           }
         }
       }

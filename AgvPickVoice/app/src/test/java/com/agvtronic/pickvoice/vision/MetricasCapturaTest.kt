@@ -51,18 +51,20 @@ class MetricasCapturaTest {
   }
 
   @Test
-  fun `fracasso aplica cooldown e terceira falha esgota ciclo`() {
+  fun `fracasso aplica cooldown mas nao limita tentativas futuras`() {
+    // Sem esgotamento (add-operator-feedback-improvements): a câmera continua tentando até o
+    // operador escanear ou reportar exceção por voz, não até um número fixo de tentativas.
     val gatilho = GatilhoDeCaptura(ajustes(quadrosEstaveisParaCaptura = 1))
     val boa = MetricasCaptura(500.0, 1.0)
 
     assertTrue(gatilho.avaliar(boa, 0).capturar)
-    assertFalse(gatilho.registrarFracasso(10))
+    gatilho.registrarFracasso(10)
     assertFalse(gatilho.avaliar(boa, 1_000).capturar)
     assertTrue(gatilho.avaliar(boa, 1_510).capturar)
-    assertFalse(gatilho.registrarFracasso(1_520))
+    gatilho.registrarFracasso(1_520)
     assertTrue(gatilho.avaliar(boa, 3_020).capturar)
-    assertTrue(gatilho.registrarFracasso(3_030))
-    assertFalse(gatilho.avaliar(boa, 5_000).capturar)
+    gatilho.registrarFracasso(3_030)
+    assertTrue(gatilho.avaliar(boa, 4_530).capturar)
   }
 
   @Test
@@ -79,7 +81,6 @@ class MetricasCapturaTest {
       AjustesVisao(
           quadrosEstaveisParaCaptura = quadrosEstaveisParaCaptura,
           cooldownCapturaMs = 1_500,
-          maxTentativasCaptura = 3,
       )
 
   private fun recorte(pixel: (x: Int, y: Int) -> Int): RecorteNv21 {

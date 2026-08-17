@@ -94,7 +94,6 @@ class AjustesVisaoTest {
                 limiarEstabilidade=8.5
                 quadrosEstaveisParaCaptura=4
                 cooldownCapturaMs=2000
-                maxTentativasCaptura=2
                 timeoutOrientacaoMs=9000
                 """.trimIndent()
             )
@@ -106,7 +105,6 @@ class AjustesVisaoTest {
     assertEquals(8.5f, ajustes.limiarEstabilidade, 1e-6f)
     assertEquals(4, ajustes.quadrosEstaveisParaCaptura)
     assertEquals(2_000, ajustes.cooldownCapturaMs)
-    assertEquals(2, ajustes.maxTentativasCaptura)
     assertEquals(9_000, ajustes.timeoutOrientacaoMs)
   }
 

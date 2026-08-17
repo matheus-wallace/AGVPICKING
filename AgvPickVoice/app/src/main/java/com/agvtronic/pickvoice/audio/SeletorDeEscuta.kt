@@ -33,8 +33,13 @@ object SeletorDeEscuta {
         // A escolha da ordem é contingência de tela (design.md - Decisão 4).
         PickingState.AguardandoOrdem -> null
 
-        is PickingState.OrdemCarregada -> comando(VocabularioDeVoz.INICIAR)
-        is PickingState.NavegandoParaEndereco -> comando(VocabularioDeVoz.CHEGUEI)
+        // "próximo" soma a "iniciar" e a "cheguei" sem substituí-las (design.md - Decisão 8 de
+        // add-operator-feedback-improvements): como a gramática é fechada, sem a palavra aqui o
+        // Vosk nunca a transcreve e o sinônimo já aceito pelo [InterpretadorDeFala] fica morto.
+        is PickingState.OrdemCarregada ->
+            comando(VocabularioDeVoz.INICIAR, VocabularioDeVoz.PROXIMO)
+        is PickingState.NavegandoParaEndereco ->
+            comando(VocabularioDeVoz.CHEGUEI, VocabularioDeVoz.PROXIMO)
 
         // Dois dígitos: o perfil longo do doc §5.1, que tolera a micropausa entre eles.
         is PickingState.AguardandoCheckDigit ->
@@ -57,18 +62,26 @@ object SeletorDeEscuta {
                 perfil = PerfilEndpoint.DIGITOS,
             )
 
+        // "próximo" é sinônimo aditivo de "confirmar" aqui (design.md - Decisão 8): o passo só
+        // avança sem dado novo, então a mesma palavra que fecha `AlocandoCarrinho` e
+        // `ItemConcluido` também serve para o readback. "corrigir" não ganha sinônimo.
         is PickingState.ReadbackQuantidade ->
-            comando(VocabularioDeVoz.CONFIRMAR, VocabularioDeVoz.CORRIGIR)
+            comando(VocabularioDeVoz.CONFIRMAR, VocabularioDeVoz.PROXIMO, VocabularioDeVoz.CORRIGIR)
 
-        is PickingState.AlocandoCarrinho -> comando(VocabularioDeVoz.ALOCADO)
+        // Idem: "próximo" soma a "alocado" sem substituí-la (design.md - Decisão 8).
+        is PickingState.AlocandoCarrinho ->
+            comando(VocabularioDeVoz.ALOCADO, VocabularioDeVoz.PROXIMO)
         is PickingState.ItemConcluido -> comando(VocabularioDeVoz.PROXIMO)
 
         // O único estado de vocabulário aberto (design.md - Decisão 2).
         is PickingState.TratandoExcecao ->
             ConfiguracaoDeEscuta(palavras = emptyList(), perfil = PerfilEndpoint.TEXTO_LIVRE)
 
-        is PickingState.ConferenciaFinal -> comando(VocabularioDeVoz.CONCLUIR)
-        is PickingState.OrdemConcluida -> comando(VocabularioDeVoz.ENCERRAR)
+        // Idem: "próximo" soma a "concluir" e a "encerrar" (design.md - Decisão 8).
+        is PickingState.ConferenciaFinal ->
+            comando(VocabularioDeVoz.CONCLUIR, VocabularioDeVoz.PROXIMO)
+        is PickingState.OrdemConcluida ->
+            comando(VocabularioDeVoz.ENCERRAR, VocabularioDeVoz.PROXIMO)
 
         // Contrapartida de "parar": sem ela a sessão pausada só sairia do lugar por toque, e o
         // ciclo hands-free ficaria aberto. Nenhum transversal aqui — o estado não é operacional

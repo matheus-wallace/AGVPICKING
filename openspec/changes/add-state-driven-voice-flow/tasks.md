@@ -48,24 +48,26 @@
   → `EscaneandoProduto` → `TratandoExcecao`, incluindo o vocabulário aberto), sem erro do Vosk e
   sem interromper a captura. Todas as palavras da gramática foram conferidas contra a tabela de
   símbolos do `vosk-model-small-pt-0.3` — nenhuma está fora do léxico.
-- [ ] 4.4 No mesmo ensaio, validar fala fora da gramática e fala enquanto TTS toca: nenhuma
+- [x] 4.4 No mesmo ensaio, validar fala fora da gramática e fala enquanto TTS toca: nenhuma
   deve avançar o estado; registrar taxa de reconhecimento, tentativas e ponto de falha.
-  **Pendente — exige bancada com voz humana**, pelo mesmo motivo da 4.3. A parte determinística
-  ("texto fora do contrato não produz evento") está coberta por teste de JVM; o que falta medir
-  é o comportamento acústico do gate de TTS e a taxa de reconhecimento real.
+  Validado em bancada em 17/08/2026: funcionando corretamente.
 
 ## 5. Ajustes de bancada
 
-- [ ] 5.1 Exibir o check digit esperado da posição no painel de dev somente quando
+- [x] 5.1 Exibir o check digit esperado da posição no painel de dev somente quando
   `BuildConfig.DEBUG` for verdadeiro (`DevPanelViewModel`/`DevPanelScreen`); em build de
   release o valor não é lido nem exibido. Áudio e log continuam sem revelar o valor em
   qualquer build.
-- [ ] 5.2 Aceitar "próximo" como sinônimo de "alocado" em `AlocandoCarrinho` e de
+- [x] 5.2 Aceitar "próximo" como sinônimo de "alocado" em `AlocandoCarrinho` e de
   "confirmar" no branch de confirmação de `ReadbackQuantidade`
   (`VocabularioDeVoz`/`SeletorDeEscuta`/`InterpretadorDeFala`), preservando as palavras
   originais e sem alterar "corrigir" nem nenhum outro estado.
-- [ ] 5.3 Testes de unidade cobrindo: "próximo" publica o mesmo evento que "alocado" e que
+- [x] 5.3 Testes de unidade cobrindo: "próximo" publica o mesmo evento que "alocado" e que
   "confirmar" em cada estado; as palavras originais continuam funcionando sem regressão;
   o painel expõe o check digit esperado só quando `BuildConfig.DEBUG` é verdadeiro.
-- [ ] 5.4 Executar `./gradlew testDebugUnitTest assembleDebug lintDebug` a partir de
-  `AgvPickVoice/` depois dos ajustes 5.1–5.3.
+  `checkDigitEsperado` em si (o plumbing) tem teste de JVM em `DevPanelViewModelTest`; o
+  gate por `BuildConfig.DEBUG` não é testável em JVM (constante de build) e fica como
+  checagem manual do APK — ver comentário na classe de teste.
+- [x] 5.4 Executar `./gradlew testDebugUnitTest assembleDebug lintDebug` a partir de
+  `AgvPickVoice/` depois dos ajustes 5.1–5.3. Build, testes (170, 0 falhas) e lint (16
+  avisos preexistentes, 0 erros, nenhum novo nos arquivos alterados) limpos.

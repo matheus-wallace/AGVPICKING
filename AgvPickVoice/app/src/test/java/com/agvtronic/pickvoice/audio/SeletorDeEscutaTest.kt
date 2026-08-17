@@ -85,11 +85,42 @@ class SeletorDeEscutaTest {
   }
 
   @Test
-  fun `readback aceita confirmar e corrigir`() {
+  fun `estados de avanco aceitam proximo alem da palavra original`() {
+    // Gramática fechada: sem "próximo" listada aqui o Vosk nunca transcreve a palavra, e o
+    // sinônimo que o InterpretadorDeFala já aceita nunca chega a ser exercido em bancada.
+    val estados =
+        mapOf(
+            PickingState.OrdemCarregada("274K5010000-408176", 3) to VocabularioDeVoz.INICIAR,
+            PickingState.NavegandoParaEndereco(item) to VocabularioDeVoz.CHEGUEI,
+            PickingState.ConferenciaFinal("274K5010000-408176") to VocabularioDeVoz.CONCLUIR,
+            PickingState.OrdemConcluida("274K5010000-408176") to VocabularioDeVoz.ENCERRAR,
+        )
+
+    estados.forEach { (estado, palavra) ->
+      val palavras = SeletorDeEscuta.para(estado)?.palavras
+      assertTrue("$estado deveria aceitar $palavra", palavras?.contains(palavra) == true)
+      assertTrue(
+          "$estado deveria aceitar ${VocabularioDeVoz.PROXIMO}",
+          palavras?.contains(VocabularioDeVoz.PROXIMO) == true,
+      )
+    }
+  }
+
+  @Test
+  fun `readback aceita confirmar, proximo e corrigir`() {
     val config = SeletorDeEscuta.para(PickingState.ReadbackQuantidade(item, 12))
 
     assertTrue(config?.palavras?.contains(VocabularioDeVoz.CONFIRMAR) == true)
+    assertTrue(config?.palavras?.contains(VocabularioDeVoz.PROXIMO) == true)
     assertTrue(config?.palavras?.contains(VocabularioDeVoz.CORRIGIR) == true)
+  }
+
+  @Test
+  fun `alocando carrinho aceita alocado e proximo`() {
+    val config = SeletorDeEscuta.para(PickingState.AlocandoCarrinho(item, 12))
+
+    assertTrue(config?.palavras?.contains(VocabularioDeVoz.ALOCADO) == true)
+    assertTrue(config?.palavras?.contains(VocabularioDeVoz.PROXIMO) == true)
   }
 
   @Test

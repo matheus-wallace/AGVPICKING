@@ -2,6 +2,7 @@ package com.agvtronic.pickvoice.ui.devpanel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.agvtronic.pickvoice.BuildConfig
 import com.agvtronic.pickvoice.audio.output.DiagnosticoSaidaAudio
 import com.agvtronic.pickvoice.data.PickingRepository
 import com.agvtronic.pickvoice.data.model.Linha
@@ -41,12 +42,14 @@ class DevPanelViewModel(
 
   val uiState: StateFlow<DevPanelUiState> =
       combine(actor.state, ordemFlow, diagnosticoAudio) { estado, ordem, audio ->
+            val linha = linhaDe(estado, ordem)
             DevPanelUiState(
                 estado = estado,
                 ordem = ordem,
-                linhaEmAndamento = linhaDe(estado, ordem),
+                linhaEmAndamento = linha,
                 acoes = acoesPara(estado, ordem),
                 diagnosticoAudio = audio,
+                checkDigitEsperado = linha?.senhaEndereco.takeIf { BuildConfig.DEBUG },
             )
           }
           .stateIn(

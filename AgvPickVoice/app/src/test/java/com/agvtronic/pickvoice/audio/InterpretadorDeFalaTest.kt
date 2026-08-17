@@ -52,7 +52,7 @@ class InterpretadorDeFalaTest {
   }
 
   @Test
-  fun `readback so aceita confirmar e corrigir`() {
+  fun `readback so aceita confirmar, proximo e corrigir`() {
     val estado = PickingState.ReadbackQuantidade(item, 12)
 
     assertEquals(
@@ -64,6 +64,77 @@ class InterpretadorDeFalaTest {
         interpretar(estado, "corrigir"),
     )
     assertNull(interpretar(estado, "doze"))
+  }
+
+  @Test
+  fun `proximo e sinonimo aditivo em readback e alocando carrinho`() {
+    // design.md - Decisão 8 de add-state-driven-voice-flow: "próximo" soma às palavras
+    // existentes, não as substitui.
+    assertEquals(
+        IntencaoDeVoz.Direta(PickingEvent.ReadbackConfirmado),
+        interpretar(PickingState.ReadbackQuantidade(item, 12), "próximo"),
+    )
+    assertEquals(
+        IntencaoDeVoz.Direta(PickingEvent.ItemAlocado),
+        interpretar(PickingState.AlocandoCarrinho(item, 12), "próximo"),
+    )
+    // As palavras originais continuam funcionando sem regressão.
+    assertEquals(
+        IntencaoDeVoz.Direta(PickingEvent.ItemAlocado),
+        interpretar(PickingState.AlocandoCarrinho(item, 12), "alocado"),
+    )
+    // "corrigir" não ganha sinônimo: só a palavra original produz ReadbackCorrecaoSolicitada.
+    assertEquals(
+        IntencaoDeVoz.Direta(PickingEvent.ReadbackCorrecaoSolicitada),
+        interpretar(PickingState.ReadbackQuantidade(item, 12), "corrigir"),
+    )
+  }
+
+  @Test
+  fun `proximo e sinonimo aditivo em todo estado com uma palavra de avanco`() {
+    // design.md - Decisão 6 de add-operator-feedback-improvements: estende o padrão da
+    // Decisão 8 acima a todo estado que só espera uma palavra de avanço.
+    assertEquals(
+        IntencaoDeVoz.IniciarNavegacao,
+        interpretar(PickingState.OrdemCarregada("274K5010000-408176", 3), "próximo"),
+    )
+    assertEquals(
+        IntencaoDeVoz.Direta(PickingEvent.EnderecoAlcancado),
+        interpretar(PickingState.NavegandoParaEndereco(item), "próximo"),
+    )
+    assertEquals(
+        IntencaoDeVoz.Direta(PickingEvent.ConferenciaConcluida),
+        interpretar(PickingState.ConferenciaFinal("274K5010000-408176"), "próximo"),
+    )
+    assertEquals(
+        IntencaoDeVoz.Direta(PickingEvent.OrdemEncerrada),
+        interpretar(PickingState.OrdemConcluida("274K5010000-408176"), "próximo"),
+    )
+    // As palavras originais continuam funcionando sem regressão.
+    assertEquals(
+        IntencaoDeVoz.IniciarNavegacao,
+        interpretar(PickingState.OrdemCarregada("274K5010000-408176", 3), "iniciar"),
+    )
+    assertEquals(
+        IntencaoDeVoz.Direta(PickingEvent.EnderecoAlcancado),
+        interpretar(PickingState.NavegandoParaEndereco(item), "cheguei"),
+    )
+    assertEquals(
+        IntencaoDeVoz.Direta(PickingEvent.ConferenciaConcluida),
+        interpretar(PickingState.ConferenciaFinal("274K5010000-408176"), "concluir"),
+    )
+    assertEquals(
+        IntencaoDeVoz.Direta(PickingEvent.OrdemEncerrada),
+        interpretar(PickingState.OrdemConcluida("274K5010000-408176"), "encerrar"),
+    )
+  }
+
+  @Test
+  fun `proximo nao se estende a estados fora da lista`() {
+    // design.md - Decisão 6: só estados com uma única palavra de avanço ganham o sinônimo.
+    assertNull(interpretar(PickingState.AguardandoCheckDigit(item, TipoCheckDigit.POSICAO), "próximo"))
+    assertNull(interpretar(PickingState.ConfirmandoQuantidade(item, 12), "próximo"))
+    // `TratandoExcecao` saiu desta lista de propósito — ver o teste da saída da ocorrência.
   }
 
   @Test
@@ -92,11 +163,23 @@ class InterpretadorDeFalaTest {
   }
 
   @Test
-  fun `quantidade recusa magnitude repetida, zero e valor fora do intervalo`() {
+  fun `quantidade aceita leitura digito a digito`() {
     val estado = PickingState.ConfirmandoQuantidade(item, 12)
 
-    // "dois dois" seriam dois dígitos ditados, não a quantidade 4.
-    assertNull(interpretar(estado, "dois dois"))
+    assertEquals(quantidade(12), interpretar(estado, "um dois"))
+    assertEquals(quantidade(22), interpretar(estado, "dois dois"))
+    assertEquals(quantidade(106), interpretar(estado, "um zero seis"))
+    // Zero à esquerda cai: aqui o resultado é número, não código como no check digit.
+    assertEquals(quantidade(5), interpretar(estado, "zero cinco"))
+  }
+
+  @Test
+  fun `quantidade recusa sequencia longa, magnitude repetida, zero e valor fora do intervalo`() {
+    val estado = PickingState.ConfirmandoQuantidade(item, 12)
+
+    // Acima de três algarismos passa do teto de 999 — não há leitura plausível.
+    assertNull(interpretar(estado, "um dois três quatro"))
+    // Nem por extenso nem dígito a dígito: "trinta" não é algarismo.
     assertNull(interpretar(estado, "vinte trinta"))
     // Zero unidade não é coleta: é ruptura, e tem comando próprio.
     assertNull(interpretar(estado, "zero"))
@@ -211,6 +294,11 @@ class InterpretadorDeFalaTest {
     )
     // Palavra solta em vocabulário aberto é ruído do galpão, não relato.
     assertNull(interpretar(estado, "caixa"))
+    // ...menos "próximo", que é a saída curta da ocorrência (bancada de 17/08/2026).
+    assertEquals(
+        IntencaoDeVoz.Direta(PickingEvent.ExcecaoRegistrada),
+        interpretar(estado, "próximo"),
+    )
     // Um transversal continua funcionando mesmo com o vocabulário aberto.
     assertEquals(
         IntencaoDeVoz.Direta(PickingEvent.ComandoParar),

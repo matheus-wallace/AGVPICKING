@@ -1,8 +1,8 @@
 package com.agvtronic.pickvoice.ui.mirror
 
+import android.graphics.SurfaceTexture
 import android.view.Surface
-import android.view.SurfaceHolder
-import android.view.SurfaceView
+import android.view.TextureView
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -32,9 +32,9 @@ import com.agvtronic.pickvoice.vision.calcularGeometriaPreview
  *
  * Extraída de `MirrorScreen` para que a tela operacional hospede a mesma prévia durante a
  * validação de produto sem duplicar as regras de anexar/remover `Surface` já verificadas em
- * bancada: quem sai de composição destrói o `SurfaceView`, o callback chama [aoRemover] e o
- * renderizador para. Nenhum frame é retido aqui — a `Surface` pertence ao `SurfaceView`, e o
- * componente não guarda imagem, buffer nem `Bitmap`.
+ * bancada: quem sai de composição destrói o `TextureView`, o callback chama [aoRemover] e o
+ * renderizador para. Nenhum frame é retido aqui — a `Surface` só embrulha a `SurfaceTexture` do
+ * `TextureView`, e o componente não guarda imagem, buffer nem `Bitmap`.
  */
 @Composable
 fun PreviaEspelho(
@@ -75,6 +75,17 @@ fun PreviaEspelho(viewModel: MirrorViewModel, modifier: Modifier = Modifier) {
   )
 }
 
+/**
+ * A superfície de vídeo em si.
+ *
+ * `TextureView` e não `SurfaceView`: o segundo é uma camada de composição própria, um buraco
+ * recortado na janela, e não acompanha de forma confiável um componente que é movido ou
+ * transformado dentro da árvore Compose — em bancada isso aparece como tela preta ao arrastar a
+ * miniatura. O `TextureView` desenha como qualquer outra View, então segue o arraste.
+ *
+ * A `Surface` aqui é construída pelo componente a partir da `SurfaceTexture`, e por isso é ele
+ * quem precisa liberá-la: são dois objetos distintos, e soltar só a textura vazaria a Surface.
+ */
 @Composable
 private fun SuperficieDePrevia(
     aoAnexar: (Surface) -> Unit,
@@ -84,23 +95,41 @@ private fun SuperficieDePrevia(
   val removerAtual by rememberUpdatedState(aoRemover)
   val callback =
       remember {
-        object : SurfaceHolder.Callback {
-          override fun surfaceCreated(holder: SurfaceHolder) {
-            anexarAtual(holder.surface)
+        object : TextureView.SurfaceTextureListener {
+          private var surfaceAtual: Surface? = null
+
+          override fun onSurfaceTextureAvailable(
+              surfaceTexture: SurfaceTexture,
+              width: Int,
+              height: Int,
+          ) {
+            anexarAtual(Surface(surfaceTexture).also { surfaceAtual = it })
           }
 
-          override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {
-            anexarAtual(holder.surface)
+          // O callback antigo de `SurfaceHolder` reanexava a cada mudança de tamanho; manter o
+          // mesmo comportamento evita que o renderizador continue escrevendo na geometria velha.
+          override fun onSurfaceTextureSizeChanged(
+              surfaceTexture: SurfaceTexture,
+              width: Int,
+              height: Int,
+          ) {
+            surfaceAtual?.let(anexarAtual)
           }
 
-          override fun surfaceDestroyed(holder: SurfaceHolder) {
+          override fun onSurfaceTextureDestroyed(surfaceTexture: SurfaceTexture): Boolean {
             removerAtual()
+            surfaceAtual?.release()
+            surfaceAtual = null
+            // `true` devolve a textura para o próprio TextureView liberar.
+            return true
           }
+
+          override fun onSurfaceTextureUpdated(surfaceTexture: SurfaceTexture) = Unit
         }
       }
 
   AndroidView(
-      factory = { contexto -> SurfaceView(contexto).also { it.holder.addCallback(callback) } },
+      factory = { contexto -> TextureView(contexto).also { it.surfaceTextureListener = callback } },
       modifier = Modifier.fillMaxSize(),
   )
 

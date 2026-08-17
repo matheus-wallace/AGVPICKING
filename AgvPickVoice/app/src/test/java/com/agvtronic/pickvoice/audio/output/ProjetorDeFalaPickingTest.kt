@@ -31,6 +31,25 @@ class ProjetorDeFalaPickingTest {
   }
 
   @Test
+  fun `entrada em readback fala a quantidade para confirmacao`() {
+    assertEquals(
+        "Confirma 12?",
+        projetor.projetar(PickingState.ReadbackQuantidade(item, 12))?.texto,
+    )
+  }
+
+  @Test
+  fun `correcao de readback repete a mesma mensagem da primeira entrada em ConfirmandoQuantidade`() {
+    val primeiraEntrada = projetor.projetar(PickingState.ConfirmandoQuantidade(item, 12))
+    // PickingReducer.kt:175-179: ReadbackCorrecaoSolicitada volta para ConfirmandoQuantidade
+    // com a quantidade da linha em `quantidadeEsperada` — mesmo campo que a primeira entrada.
+    val apoCorrecao = projetor.projetar(PickingState.ConfirmandoQuantidade(item, 12))
+
+    assertEquals(primeiraEntrada?.texto, apoCorrecao?.texto)
+    assertEquals("Colete 12 unidades", apoCorrecao?.texto)
+  }
+
+  @Test
   fun `pedido de check digit nunca inclui valor protegido`() {
     val posicao =
         projetor.projetar(PickingState.AguardandoCheckDigit(item, TipoCheckDigit.POSICAO))!!

@@ -122,10 +122,16 @@ private fun CartaoItem(uiState: DevPanelUiState) {
             Text("Item em andamento", style = MaterialTheme.typography.labelMedium)
             Text("${linha.produto} — ${linha.descricao}")
             Text("Endereço: ${linha.endereco.etiqueta}")
-            // A senha do endereço saiu daqui de propósito: com o check digit por voz no lugar,
-            // mostrá-la na tela é entregar a resposta ao operador, e a spec de
-            // `state-driven-voice-flow` proíbe o valor esperado no painel. Quem confere é o
-            // `ResolvedorDeIntencao`, comparando sem revelar.
+            // Só em build de debug (design.md - Decisão 7): quem confere o check digit falado
+            // continua sendo o `ResolvedorDeIntencao`, sem atalho — isto é leitura de bancada,
+            // não um caminho de confirmação. Em release, `checkDigitEsperado` já chega nulo.
+            uiState.checkDigitEsperado?.let { checkDigit ->
+              Text(
+                  "Check digit esperado: $checkDigit",
+                  style = MaterialTheme.typography.bodySmall,
+                  fontFamily = FontFamily.Monospace,
+              )
+            }
             Text(
                 "Código de barras: ${linha.endereco.codbarra}",
                 style = MaterialTheme.typography.bodySmall,
