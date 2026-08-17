@@ -7,12 +7,19 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts.RequestMultiplePermissions
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.agvtronic.pickvoice.ui.devpanel.DevPanelViewModel
 import com.agvtronic.pickvoice.ui.mirror.MirrorScreen
 import com.agvtronic.pickvoice.ui.mirror.MirrorViewModel
+import com.agvtronic.pickvoice.ui.mirror.PreviaEspelho
+import com.agvtronic.pickvoice.ui.operation.OperationScreen
+import com.agvtronic.pickvoice.ui.operation.OperationViewModel
 import com.meta.wearable.dat.core.Wearables
 import com.meta.wearable.dat.core.types.Permission
 import com.meta.wearable.dat.core.types.PermissionStatus
@@ -85,15 +92,42 @@ class MainActivity : ComponentActivity() {
         )
       }
       initializer { MirrorViewModel(container.controladorDeVisao) }
+      initializer {
+        OperationViewModel(
+            container.pickingActor,
+            container.pickingRepository,
+            container.controladorDeVisao.diagnostico,
+            container.controladorDeFala.diagnostico,
+        )
+      }
     }
 
     setContent {
       MaterialTheme {
         Surface {
-          MirrorScreen(
-              viewModel = viewModel(factory = factory),
-              devPanelViewModel = viewModel(factory = factory),
-          )
+          // Os três ViewModels são resolvidos aqui, fora do `when`: eles vivem no
+          // `ViewModelStore` da `Activity`, então alternar de superfície não recria nenhum
+          // deles — não há segunda assinatura de estado, nem `iniciar`/`parar` de sessão,
+          // áudio ou visão nessa troca.
+          val operationViewModel: OperationViewModel = viewModel(factory = factory)
+          val mirrorViewModel: MirrorViewModel = viewModel(factory = factory)
+          val devPanelViewModel: DevPanelViewModel = viewModel(factory = factory)
+          var superficie by rememberSaveable { mutableStateOf(Superficie.OPERACAO) }
+
+          when (superficie) {
+            Superficie.OPERACAO ->
+                OperationScreen(
+                    viewModel = operationViewModel,
+                    previa = { PreviaEspelho(mirrorViewModel) },
+                    aoAbrirDebug = { superficie = Superficie.DEBUG },
+                )
+            Superficie.DEBUG ->
+                MirrorScreen(
+                    viewModel = mirrorViewModel,
+                    devPanelViewModel = devPanelViewModel,
+                    aoVoltarParaOperacao = { superficie = Superficie.OPERACAO },
+                )
+          }
         }
       }
     }
@@ -140,4 +174,19 @@ class MainActivity : ComponentActivity() {
             Manifest.permission.CAMERA,
         )
   }
+}
+
+/**
+ * Qual superfície está visível.
+ *
+ * Estado só de apresentação: a escolha vive na composição, não no `PickingActor`. Trocar de
+ * superfície é uma troca de composable e nada mais — nenhum `PickingEvent`, nenhuma sessão
+ * nova, nenhum reinício de áudio ou de visão.
+ */
+private enum class Superficie {
+  /** A tela do separador, aberta por padrão. */
+  OPERACAO,
+
+  /** A prévia espelho com o painel de eventos, para bancada e diagnóstico. */
+  DEBUG,
 }
