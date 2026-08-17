@@ -3,8 +3,9 @@ package com.agvtronic.pickvoice.di
 import android.content.Context
 import android.util.Log
 import com.agvtronic.pickvoice.audio.AjustesAsr
+// Importada só pelos links de KDoc acima de `fonteAudio`: é a fonte para onde se volta quando
+// houver óculos físico na bancada.
 import com.agvtronic.pickvoice.audio.AudioHfpOculos
-// Importada só pelos links de KDoc acima de `fonteAudio`: é a fonte para onde se reverte.
 import com.agvtronic.pickvoice.audio.AudioMicrofoneSimulado
 import com.agvtronic.pickvoice.audio.FonteAudio
 import com.agvtronic.pickvoice.audio.PublicadorDeVoz
@@ -94,19 +95,21 @@ class AppContainer(private val appContext: Context) {
 
   /**
    * A fonte de áudio do doc §5.2, interface-tipada pelo mesmo motivo do [pickingRepository]:
-   * trocar o microfone do celular pelo HFP do óculos era para ser **esta linha e mais nenhuma**
-   * — e foi. A troca do doc §13.3 já aconteceu: o app captura pela rota Bluetooth SCO do
-   * óculos, não mais pelo microfone do aparelho.
+   * trocar o microfone do celular pelo HFP do óculos é **esta linha e mais nenhuma** — é
+   * literalmente o que o doc §13.3 exige.
    *
-   * **Para reverter, uma linha:** voltar para `AudioMicrofoneSimulado(ajustesAsr)`. É o
-   * caminho se a bancada com os óculos reais mostrar problema na rota HFP — que ainda não foi
-   * medida — e também o modo normal de desenvolver sem óculos físico por perto, já que
-   * [AudioHfpOculos] simplesmente não captura quando não há SCO disponível.
+   * **As duas implementações existem e estão prontas.** A ativa hoje é
+   * [AudioMicrofoneSimulado], que captura pelo microfone do próprio aparelho, porque o
+   * desenvolvimento está rodando sem óculos físico: o `MockDeviceKit` simula a câmera, não o
+   * áudio, e sem óculos pareado não há dispositivo Bluetooth SCO nenhum. [AudioHfpOculos]
+   * degrada em silêncio nesse cenário — não quebra, mas também não captura nada, e a voz
+   * simplesmente emudece na bancada.
    *
-   * [AudioMicrofoneSimulado] continua no código e nos testes justamente por isso; ela não é
-   * legado.
+   * **Quando houver óculos real para bancada, a volta é uma linha:** `AudioHfpOculos(appContext)`.
+   * Nada mais muda aqui — cada implementação declara a própria taxa de amostragem, e é dela
+   * que o [reconhecedorDeComando] parte.
    */
-  val fonteAudio: FonteAudio = AudioHfpOculos(appContext)
+  val fonteAudio: FonteAudio = AudioMicrofoneSimulado(ajustesAsr)
 
   /** Saída substituível: TTS local nesta fatia, Piper/HFP quando essa rota existir. */
   val saidaDeAudio: SaidaDeAudio = SaidaTextToSpeechAndroid(appContext)
