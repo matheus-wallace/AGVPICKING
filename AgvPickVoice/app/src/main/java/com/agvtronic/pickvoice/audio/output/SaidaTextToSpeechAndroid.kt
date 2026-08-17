@@ -23,6 +23,19 @@ class SaidaTextToSpeechAndroid(context: Context) : SaidaDeAudio {
   private val _diagnostico = MutableStateFlow(DiagnosticoSaidaAudio())
   override val diagnostico: StateFlow<DiagnosticoSaidaAudio> = _diagnostico.asStateFlow()
 
+  private val _falando = MutableStateFlow(false)
+  override val falando: StateFlow<Boolean> = _falando.asStateFlow()
+
+  /**
+   * Elocuções entregues ao motor e ainda não encerradas.
+   *
+   * Contador e não booleano porque `QUEUE_ADD` permite mais de uma na fila: com um booleano, o
+   * `onDone` da primeira desligaria o [falando] no meio da segunda e o ASR voltaria a escutar
+   * o próprio TTS. Sobe já em [reproduzir], antes do `onStart`, para fechar a janela entre
+   * enfileirar e começar a falar.
+   */
+  private var elocucoesEmAndamento = 0
+
   override fun iniciar() {
     val geracaoAtual: Long
     synchronized(lock) {
@@ -58,6 +71,10 @@ class SaidaTextToSpeechAndroid(context: Context) : SaidaDeAudio {
     synchronized(lock) {
       pendentes.clear()
       motor?.stop()
+      // `stop()` descarta o que estava na fila do motor; os callbacks das elocuções abortadas
+      // podem nunca chegar. Zerar aqui é o que impede o [falando] de ficar preso em `true` e
+      // deixar o reconhecimento surdo pelo resto da sessão.
+      zerarElocucoes()
     }
   }
 
@@ -66,6 +83,7 @@ class SaidaTextToSpeechAndroid(context: Context) : SaidaDeAudio {
     synchronized(lock) {
       geracao++
       pendentes.clear()
+      zerarElocucoes()
       motorParaFechar = motor
       motor = null
       _diagnostico.update { it.copy(estado = EstadoSaidaAudio.PARADA, categoriaErro = null) }
@@ -98,13 +116,21 @@ class SaidaTextToSpeechAndroid(context: Context) : SaidaDeAudio {
           object : UtteranceProgressListener() {
             override fun onStart(utteranceId: String?) = Unit
 
-            override fun onDone(utteranceId: String?) = Unit
+            override fun onDone(utteranceId: String?) {
+              encerrarElocucao()
+            }
+
+            override fun onStop(utteranceId: String?, interrupted: Boolean) {
+              encerrarElocucao()
+            }
 
             override fun onError(utteranceId: String?) {
+              encerrarElocucao()
               registrarFalhaDeReproducao()
             }
 
             override fun onError(utteranceId: String?, errorCode: Int) {
+              encerrarElocucao()
               registrarFalhaDeReproducao()
             }
           }
@@ -120,12 +146,36 @@ class SaidaTextToSpeechAndroid(context: Context) : SaidaDeAudio {
     val modoFila =
         if (mensagem.prioridade == PrioridadeFala.CRITICA) {
           tts.stop()
+          // O flush apagou a fila do motor: o que estava em andamento não conta mais.
+          zerarElocucoes()
           TextToSpeech.QUEUE_FLUSH
         } else {
           TextToSpeech.QUEUE_ADD
         }
     val resultado = tts.speak(mensagem.texto, modoFila, null, mensagem.chave)
-    if (resultado == TextToSpeech.ERROR) registrarFalhaDeReproducao()
+    if (resultado == TextToSpeech.ERROR) registrarFalhaDeReproducao() else iniciarElocucao()
+  }
+
+  private fun iniciarElocucao() {
+    synchronized(lock) {
+      elocucoesEmAndamento++
+      _falando.value = true
+    }
+  }
+
+  private fun encerrarElocucao() {
+    synchronized(lock) {
+      // `coerceAtLeast` porque um `stop()` já zerou o contador e os callbacks das elocuções
+      // abortadas ainda chegam depois, do thread do motor.
+      elocucoesEmAndamento = (elocucoesEmAndamento - 1).coerceAtLeast(0)
+      _falando.value = elocucoesEmAndamento > 0
+    }
+  }
+
+  /** Só de dentro de `synchronized(lock)`. */
+  private fun zerarElocucoes() {
+    elocucoesEmAndamento = 0
+    _falando.value = false
   }
 
   /** Seleciona a melhor voz que o motor já disponibiliza; não baixa nem envia dados. */
@@ -163,6 +213,7 @@ class SaidaTextToSpeechAndroid(context: Context) : SaidaDeAudio {
   private fun indisponibilizar(tts: TextToSpeech, categoria: CategoriaErroSaidaAudio) {
     Log.e(TAG, "Saída TTS indisponível: $categoria")
     pendentes.clear()
+    zerarElocucoes()
     motor = null
     _diagnostico.update {
       it.copy(estado = EstadoSaidaAudio.INDISPONIVEL, categoriaErro = categoria)

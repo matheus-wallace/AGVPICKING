@@ -26,6 +26,13 @@ de uma transição automática já segura.
   tela de divergência por toque como contingência explícita quando a voz não funcionar.
 - Rebaixar os botões do painel a recurso de desenvolvimento: eles não são necessários
   para concluir uma ordem normal.
+- Reexibir o check digit esperado da posição no painel de dev, mas somente em build de
+  debug (`BuildConfig.DEBUG`) — nunca em release. A proibição de revelar o valor esperado
+  na saída de áudio ou em log continua valendo em qualquer build.
+- Aceitar "próximo" como sinônimo de "alocado" (`AlocandoCarrinho`) e de "confirmar"
+  (`ReadbackQuantidade`), reduzindo o vocabulário que o operador precisa lembrar para os
+  passos que só avançam sem fornecer dado novo. As palavras originais continuam
+  funcionando — é adição de sinônimo, não substituição.
 
 ## Capabilities
 

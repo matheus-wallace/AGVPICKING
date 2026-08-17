@@ -104,6 +104,7 @@ class ControladorDeFalaTest {
   private class SaidaFake : SaidaDeAudio {
     private val _diagnostico = MutableStateFlow(DiagnosticoSaidaAudio())
     override val diagnostico: StateFlow<DiagnosticoSaidaAudio> = _diagnostico.asStateFlow()
+    override val falando: StateFlow<Boolean> = MutableStateFlow(false).asStateFlow()
     val mensagens = mutableListOf<MensagemFalavel>()
     var inicios = 0
     var paradas = 0

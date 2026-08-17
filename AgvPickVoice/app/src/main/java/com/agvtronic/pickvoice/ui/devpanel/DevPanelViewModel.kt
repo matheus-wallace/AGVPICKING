@@ -20,12 +20,12 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 /**
- * Dirige o [PickingActor] por toque, no lugar da voz e da câmera que ainda não existem.
+ * Dirige o [PickingActor] por toque — hoje apenas para diagnóstico.
  *
- * Substituto declaradamente temporário: quando os pipelines de áudio e visão chegarem, quem
- * publica evento passa a ser eles, e a tela espelho do doc §12 toma o lugar desta. O valor
- * aqui é provar o padrão de ator num processo Android real e exercitar o fluxo do §3.2 de
- * ponta a ponta com dados de verdade do repositório.
+ * **Deixou de ser o caminho operacional.** Com a gramática por estado no lugar, uma ordem
+ * mockada inteira é concluída por voz e câmera depois da seleção inicial; estes botões
+ * continuam existindo para reproduzir um passo isolado em bancada sem precisar falar, e para
+ * destravar um ensaio quando o microfone não colabora. Nada aqui é exigido pelo fluxo normal.
  *
  * Cobre só o fluxo operacional. Os eventos de ciclo de vida da sessão vêm do
  * `DatSessionController`, que observa o SDK de verdade — o painel não sobe mais a sessão

@@ -2,42 +2,70 @@
 
 ## 1. Contratos puros
 
-- [ ] 1.1 Criar um mapeamento puro `PickingState` → configuração de escuta (gramática,
+- [x] 1.1 Criar um mapeamento puro `PickingState` → configuração de escuta (gramática,
   `PerfilEndpoint` e versão do estado), cobrindo cada estado operacional e os comandos
   transversais permitidos.
-- [ ] 1.2 Criar interpretador puro de resultado ASR → intenção/evento, incluindo números
+- [x] 1.2 Criar interpretador puro de resultado ASR → intenção/evento, incluindo números
   pt-BR, dígitos isolados, confirmar/corrigir, cheguei, iniciar, alocado, próximo,
   concluir e encerrar; texto fora do contrato não produz evento.
-- [ ] 1.3 Criar testes de fronteira para quantidade, check digit, ruído e resultado ASR
+- [x] 1.3 Criar testes de fronteira para quantidade, check digit, ruído e resultado ASR
   atrasado de uma versão anterior de estado.
 
 ## 2. Validação de domínio
 
-- [ ] 2.1 Criar adaptador que consulta o `PickingRepository` para validar check digit sem
+- [x] 2.1 Criar adaptador que consulta o `PickingRepository` para validar check digit sem
   expor o valor esperado, emitindo exclusivamente `CheckDigitCorreto` ou
   `CheckDigitIncorreto`.
-- [ ] 2.2 Resolver a próxima linha ao receber “próximo” e publicar `ItemFinalizado` com o
+- [x] 2.2 Resolver a próxima linha ao receber “próximo” e publicar `ItemFinalizado` com o
   item correto, preservando a semântica atual do reducer.
-- [ ] 2.3 Testar o adaptador com `MockPickingRepository`, inclusive ordem de múltiplas
+- [x] 2.3 Testar o adaptador com `MockPickingRepository`, inclusive ordem de múltiplas
   linhas e última linha.
 
 ## 3. Reconhecimento e ciclo de vida
 
-- [ ] 3.1 Refatorar `ReconhecedorDeComando` para observar `PickingActor.state`, recriar a
+- [x] 3.1 Refatorar `ReconhecedorDeComando` para observar `PickingActor.state`, recriar a
   gramática somente na thread dedicada e descartar resultado que não corresponda à versão
   atual do estado.
-- [ ] 3.2 Integrar o estado da `SaidaDeAudio`: durante uma fala, não aceitar resultado ASR
+- [x] 3.2 Integrar o estado da `SaidaDeAudio`: durante uma fala, não aceitar resultado ASR
   residual; ao fim, reiniciar a escuta do estado atual sem bloquear UI, ator ou câmera.
-- [ ] 3.3 Garantir que falha de ASR/gramática deixa o estado intacto e que os botões do
+- [x] 3.3 Garantir que falha de ASR/gramática deixa o estado intacto e que os botões do
   painel continuam disponíveis apenas para diagnóstico.
 
 ## 4. Verificação
 
-- [ ] 4.1 Adicionar testes unitários do mapeamento, interpretador e integração com o ator;
-  executar `./gradlew testDebugUnitTest` a partir de `AgvPickVoice/`.
-- [ ] 4.2 Executar `./gradlew assembleDebug lintDebug` a partir de `AgvPickVoice/`.
+- [x] 4.1 Adicionar testes unitários do mapeamento, interpretador e integração com o ator;
+  executar `./gradlew testDebugUnitTest` a partir de `AgvPickVoice/`. 160 testes, 0 falhas.
+- [x] 4.2 Executar `./gradlew assembleDebug lintDebug` a partir de `AgvPickVoice/`. Build e
+  lint limpos (16 avisos preexistentes, 0 erros, nenhum nos arquivos novos).
 - [ ] 4.3 Em aparelho físico, concluir uma ordem mockada com múltiplas linhas sem tocar nos
   botões após a seleção inicial: chegada, check digit, leitura de câmera, quantidade,
   readback, alocação, próximo item e encerramento.
+  **Pendente — exige bancada com voz humana.** Fala sintética ou tocada por alto-falante não
+  reproduz o pipeline de forma confiável (limiar de detecção na fronteira, ou zero com fone no
+  Mac), então o ensaio fica para o dono do projeto falando no aparelho. O que já foi verificado
+  no SM-G780F por toque, sem voz: o app sobe sem crash, o modelo carrega e a gramática troca a
+  cada transição observada (`OrdemCarregada` → `NavegandoParaEndereco` → `AguardandoCheckDigit`
+  → `EscaneandoProduto` → `TratandoExcecao`, incluindo o vocabulário aberto), sem erro do Vosk e
+  sem interromper a captura. Todas as palavras da gramática foram conferidas contra a tabela de
+  símbolos do `vosk-model-small-pt-0.3` — nenhuma está fora do léxico.
 - [ ] 4.4 No mesmo ensaio, validar fala fora da gramática e fala enquanto TTS toca: nenhuma
   deve avançar o estado; registrar taxa de reconhecimento, tentativas e ponto de falha.
+  **Pendente — exige bancada com voz humana**, pelo mesmo motivo da 4.3. A parte determinística
+  ("texto fora do contrato não produz evento") está coberta por teste de JVM; o que falta medir
+  é o comportamento acústico do gate de TTS e a taxa de reconhecimento real.
+
+## 5. Ajustes de bancada
+
+- [ ] 5.1 Exibir o check digit esperado da posição no painel de dev somente quando
+  `BuildConfig.DEBUG` for verdadeiro (`DevPanelViewModel`/`DevPanelScreen`); em build de
+  release o valor não é lido nem exibido. Áudio e log continuam sem revelar o valor em
+  qualquer build.
+- [ ] 5.2 Aceitar "próximo" como sinônimo de "alocado" em `AlocandoCarrinho` e de
+  "confirmar" no branch de confirmação de `ReadbackQuantidade`
+  (`VocabularioDeVoz`/`SeletorDeEscuta`/`InterpretadorDeFala`), preservando as palavras
+  originais e sem alterar "corrigir" nem nenhum outro estado.
+- [ ] 5.3 Testes de unidade cobrindo: "próximo" publica o mesmo evento que "alocado" e que
+  "confirmar" em cada estado; as palavras originais continuam funcionando sem regressão;
+  o painel expõe o check digit esperado só quando `BuildConfig.DEBUG` é verdadeiro.
+- [ ] 5.4 Executar `./gradlew testDebugUnitTest assembleDebug lintDebug` a partir de
+  `AgvPickVoice/` depois dos ajustes 5.1–5.3.

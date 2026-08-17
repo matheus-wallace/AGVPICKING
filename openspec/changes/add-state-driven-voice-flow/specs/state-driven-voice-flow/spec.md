@@ -42,7 +42,10 @@ próximo item e fechamento, publicando o `PickingEvent` existente correspondente
 
 O sistema DEVE (MUST) comparar o check digit reconhecido com o dado operacional esperado
 antes de enviar o evento ao ator. O valor esperado NÃO DEVE (MUST NOT) aparecer na saída
-de áudio, painel ou logs de diagnóstico.
+de áudio nem em logs de diagnóstico, em nenhum build. Em build de release, o valor
+esperado também NÃO DEVE (MUST NOT) aparecer no painel. Em build de debug, o painel de
+desenvolvimento PODE (MAY) exibir o valor esperado como apoio à depuração de bancada —
+essa exceção é escopada exclusivamente ao build de debug.
 
 #### Scenario: Check digit divergente
 
@@ -50,6 +53,38 @@ de áudio, painel ou logs de diagnóstico.
   dado esperado
 - **THEN** o sistema publica `CheckDigitIncorreto`
 - **AND** o ator retorna à navegação sem revelar os dígitos corretos.
+
+#### Scenario: Painel de debug mostra o valor esperado, release não
+
+- **WHEN** o app roda em build de debug e o estado é `AguardandoCheckDigit`
+- **THEN** o painel de dev pode exibir o check digit esperado da linha
+- **AND** em build de release esse mesmo valor nunca aparece no painel, na saída de áudio
+  ou em log.
+
+### Requirement: Sinônimo único para avanços sem dado novo
+
+O sistema DEVE (MUST) aceitar "próximo" como sinônimo de "alocado" em
+`AlocandoCarrinho` e de "confirmar" em `ReadbackQuantidade`, além da palavra original de
+cada estado, reduzindo o vocabulário que o operador precisa lembrar para passos que
+apenas avançam sem fornecer dado novo. Este ajuste não se estende a nenhum outro estado
+nem à palavra "corrigir".
+
+#### Scenario: "Próximo" aloca o carrinho
+
+- **WHEN** o estado é `AlocandoCarrinho` e o operador fala "próximo"
+- **THEN** o sistema publica `ItemAlocado`, o mesmo evento de quando fala "alocado".
+
+#### Scenario: "Próximo" confirma o readback
+
+- **WHEN** o estado é `ReadbackQuantidade` e o operador fala "próximo"
+- **THEN** o sistema publica `ReadbackConfirmado`, o mesmo evento de quando fala
+  "confirmar".
+
+#### Scenario: Palavras originais continuam funcionando
+
+- **WHEN** o operador fala "alocado" em `AlocandoCarrinho` ou "confirmar" em
+  `ReadbackQuantidade`
+- **THEN** o comportamento é idêntico ao existente antes deste ajuste, sem regressão.
 
 ### Requirement: Visão e voz mantêm responsabilidades separadas
 

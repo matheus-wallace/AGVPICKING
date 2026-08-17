@@ -1,10 +1,13 @@
 package com.agvtronic.pickvoice.di
 
 import android.content.Context
+import android.util.Log
 import com.agvtronic.pickvoice.audio.AjustesAsr
 import com.agvtronic.pickvoice.audio.AudioMicrofoneSimulado
 import com.agvtronic.pickvoice.audio.FonteAudio
+import com.agvtronic.pickvoice.audio.PublicadorDeVoz
 import com.agvtronic.pickvoice.audio.ReconhecedorDeComando
+import com.agvtronic.pickvoice.audio.ResolvedorDeIntencao
 import com.agvtronic.pickvoice.audio.output.ControladorDeFala
 import com.agvtronic.pickvoice.audio.output.SaidaDeAudio
 import com.agvtronic.pickvoice.audio.output.SaidaTextToSpeechAndroid
@@ -13,6 +16,7 @@ import com.agvtronic.pickvoice.data.PickingRepository
 import com.agvtronic.pickvoice.data.mock.MockPickingRepository
 import com.agvtronic.pickvoice.domain.statemachine.PickingActor
 import com.agvtronic.pickvoice.vision.AjustesVisao
+import com.agvtronic.pickvoice.vision.ComparadorDeCodigo
 import com.agvtronic.pickvoice.vision.ControladorDeVisao
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -93,6 +97,24 @@ class AppContainer(private val appContext: Context) {
    */
   val fonteAudio: FonteAudio = AudioMicrofoneSimulado(ajustesAsr)
 
+  /** Saída substituível: TTS local nesta fatia, Piper/HFP quando essa rota existir. */
+  val saidaDeAudio: SaidaDeAudio = SaidaTextToSpeechAndroid(appContext)
+
+  /**
+   * Do texto reconhecido ao `PickingEvent`, com a versão de estado no meio.
+   *
+   * Vive no [appScope] e não na thread de áudio de propósito: ele consulta o repositório, e o
+   * doc §4.2 proíbe qualquer espera na thread que alimenta o decodificador. O log fica aqui
+   * porque o publicador é Kotlin puro — assim ele continua testável na JVM.
+   */
+  private val publicadorDeVoz: PublicadorDeVoz =
+      PublicadorDeVoz(
+          actor = pickingActor,
+          resolvedor = ResolvedorDeIntencao(pickingRepository),
+          scope = appScope,
+          aoFalhar = { Log.e("PublicadorDeVoz", "Falha ao resolver intenção de voz", it) },
+      )
+
   /**
    * O produtor de eventos por voz.
    *
@@ -101,9 +123,19 @@ class AppContainer(private val appContext: Context) {
    * criar a sessão"). A construção não bloqueia: a carga é assíncrona e roda em paralelo com
    * a subida da sessão DAT, que acontece no [datScope]. Quem chama `iniciar` é a
    * `MainActivity`, depois de resolver `RECORD_AUDIO`.
+   *
+   * Recebe `SaidaDeAudio.falando` para não disputar a instrução com o TTS (design.md -
+   * Decisão 6); é por isso que a saída de áudio é construída acima dele.
    */
   val reconhecedorDeComando: ReconhecedorDeComando =
-      ReconhecedorDeComando(appContext, fonteAudio, pickingActor, ajustesAsr)
+      ReconhecedorDeComando(
+          appContext = appContext,
+          fonteAudio = fonteAudio,
+          actor = pickingActor,
+          publicador = publicadorDeVoz,
+          falaEmCurso = saidaDeAudio.falando,
+          ajustes = ajustesAsr,
+      )
 
   /** Calibração do pipeline de visão (recorte, resolução, taxa de quadros), lida uma vez. */
   private val ajustesVisao: AjustesVisao = AjustesVisao.carregar(appContext)
@@ -134,8 +166,22 @@ class AppContainer(private val appContext: Context) {
           diretorioTemporarioCapturas = File(appContext.cacheDir, "capturas-visao"),
       )
 
-  /** Saída substituível: TTS local nesta fatia, Piper/HFP quando essa rota existir. */
-  val saidaDeAudio: SaidaDeAudio = SaidaTextToSpeechAndroid(appContext)
+  /**
+   * O que faltava para `ValidandoContraDados` sair sozinho do lugar: compara o código lido com o
+   * dado da linha e publica `ValidacaoOk`/`ValidacaoDivergente`.
+   *
+   * Vive no [appScope], e não no [visaoScope]: ele não fala com o SDK nem com a câmera — só
+   * consulta o repositório, exatamente como o [publicadorDeVoz]. Começa a observar já na
+   * construção do container porque não depende de permissão nenhuma.
+   */
+  val comparadorDeCodigo: ComparadorDeCodigo =
+      ComparadorDeCodigo(
+              actor = pickingActor,
+              repository = pickingRepository,
+              scope = appScope,
+              aoRegistrar = { Log.i("ComparadorDeCodigo", it) },
+          )
+          .also { it.iniciar() }
 
   /**
    * Observador de processo que transforma estado e orientação de visão em fala. O controlador

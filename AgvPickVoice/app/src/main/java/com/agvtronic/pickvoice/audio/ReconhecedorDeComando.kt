@@ -6,13 +6,16 @@ import android.content.pm.PackageManager
 import android.util.Log
 import com.agvtronic.pickvoice.domain.statemachine.PickingActor
 import com.agvtronic.pickvoice.domain.statemachine.PickingEvent
+import com.agvtronic.pickvoice.domain.statemachine.PickingState
 import java.util.concurrent.Executors
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.async
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import org.json.JSONObject
 import org.vosk.LibVosk
@@ -22,28 +25,33 @@ import org.vosk.Recognizer
 import org.vosk.android.StorageService
 
 /**
- * O primeiro produtor de [PickingEvent] por voz do projeto — a fatia mais fina possível do
- * pipeline do doc §5.
+ * O produtor de [PickingEvent] por voz — a superfície do Vosk, e só ela.
  *
- * Faz só o corte vertical do Marco 1 (doc §13.1): uma gramática fixa de duas palavras,
- * reconhecida a partir da [FonteAudio], virando os eventos transversais que o painel de dev já
- * dispara por botão. Sem VAD do Silero, sem troca de gramática por estado, sem reranking e sem
- * TTS — tudo isso é Marco 2, e cada peça entra sem mexer no que está aqui.
+ * A gramática deixou de ser fixa: a cada transição do [PickingActor] esta classe pergunta ao
+ * [SeletorDeEscuta] o que escutar naquele estado e reconstrói o `Recognizer` na thread dedicada
+ * de áudio. **Nada de domínio mora aqui** — o que a fala significa é do [InterpretadorDeFala], o
+ * que ela vale contra o dado operacional é do [ResolvedorDeIntencao], e o envio ao ator é do
+ * [PublicadorDeVoz]. Esta classe observa `actor.state` e nunca chama `actor.send`
+ * (design.md - Decisão 1).
  *
  * ### Confinamento de thread
  *
- * `Model` e `Recognizer` do Vosk **não são thread-safe**, e a restrição vale para o projeto
- * inteiro, não só para esta classe. Tudo aqui — carga do modelo, captura e decodificação —
- * roda em [dispatcherAudio], uma thread só, criada e usada exclusivamente por este componente.
- * O `PickingActor` continua em `Dispatchers.Default` e a UI na main; a única coisa que
- * atravessa a fronteira é `actor.send`, que é `trySend` num channel ilimitado e portanto nunca
- * bloqueia a thread de áudio (doc §4.2 proíbe bloquear essa thread em qualquer coisa que não
- * seja o próprio loop de frame).
+ * `Model` e `Recognizer` do Vosk **não são thread-safe**. Carga do modelo, construção do
+ * reconhecedor, captura e decodificação rodam todas em [dispatcherAudio], uma thread só.
+ *
+ * A observação do estado é a única coisa que roda fora dela, em [Dispatchers.Default], e por um
+ * motivo concreto: `AudioRecord.read` **bloqueia** a thread de áudio, e uma corrotina bloqueada
+ * num dispatcher de thread única nunca cede a vez. Um coletor de `actor.state` hospedado ali
+ * jamais seria escalonado. O observador então só anota o que passou a valer em [solicitada]; a
+ * troca do reconhecedor acontece na thread de áudio, na janela seguinte.
  *
  * @param appContext contexto de aplicação — este componente vive além de qualquer `Activity`.
  * @param fonteAudio de onde vêm as amostras; [AudioMicrofoneSimulado] hoje, `AudioHfpOculos`
  *   no dia em que o óculos entrar (doc §5.2).
- * @param actor destino dos eventos reconhecidos.
+ * @param actor observado, nunca escrito.
+ * @param publicador destino do texto reconhecido e dono da versão do estado.
+ * @param falaEmCurso `SaidaDeAudio.falando`: enquanto `true`, nenhum resultado é aceito
+ *   (design.md - Decisão 6).
  * @param ajustes calibração de bancada; ver [AjustesAsr]. Os defaults são o comportamento de
  *   produção.
  */
@@ -51,6 +59,8 @@ class ReconhecedorDeComando(
     private val appContext: Context,
     private val fonteAudio: FonteAudio,
     private val actor: PickingActor,
+    private val publicador: PublicadorDeVoz,
+    private val falaEmCurso: StateFlow<Boolean>,
     private val ajustes: AjustesAsr = AjustesAsr(),
 ) {
 
@@ -76,6 +86,19 @@ class ReconhecedorDeComando(
   private val modelo: Deferred<Model?> = escopoAudio.async { carregarModelo() }
 
   private var escuta: Job? = null
+  private var observacao: Job? = null
+
+  /**
+   * O que o estado atual pede, publicado pelo observador e consumido pela thread de áudio.
+   *
+   * `@Volatile` porque atravessa threads: escrito em [Dispatchers.Default], lido na thread de
+   * áudio. É uma referência imutável trocada inteira, então não há estado meio-atualizado para
+   * um leitor enxergar.
+   */
+  @Volatile private var solicitada: EscutaSolicitada? = null
+
+  /** O reconhecedor em uso. Confinado na thread de áudio — nenhuma outra o toca. */
+  private var ativa: EscutaAtiva? = null
 
   /**
    * Começa a escutar. Idempotente — a `MainActivity` chama a cada volta ao primeiro plano.
@@ -93,6 +116,8 @@ class ReconhecedorDeComando(
       return
     }
 
+    publicador.iniciar()
+    observacao = escopoAudio.launch(Dispatchers.Default) { observarEstado() }
     escuta = escopoAudio.launch { escutar() }
   }
 
@@ -100,6 +125,9 @@ class ReconhecedorDeComando(
   fun parar() {
     escuta?.cancel()
     escuta = null
+    observacao?.cancel()
+    observacao = null
+    publicador.parar()
   }
 
   // -----------------------------------------------------------------------------------
@@ -123,35 +151,62 @@ class ReconhecedorDeComando(
   }
 
   // -----------------------------------------------------------------------------------
+  // Observação do estado
+  // -----------------------------------------------------------------------------------
+
+  /**
+   * Anota, a cada estado novo, a versão e a configuração de escuta correspondente.
+   *
+   * A versão sobe **aqui**, no instante da transição, e não quando a thread de áudio troca de
+   * reconhecedor: entre uma coisa e outra o decodificador antigo ainda pode fechar uma
+   * elocução, e é exatamente esse resultado que precisa ser invalidado (design.md - Decisão 3).
+   *
+   * `StateFlow` entrega o valor corrente na assinatura, então o estado em vigor no momento do
+   * `iniciar` também passa por aqui.
+   */
+  private suspend fun observarEstado() {
+    actor.state.collect { estado ->
+      solicitada = EscutaSolicitada(publicador.novaVersao(), estado, SeletorDeEscuta.para(estado))
+    }
+  }
+
+  // -----------------------------------------------------------------------------------
   // Loop de escuta
   // -----------------------------------------------------------------------------------
 
   private suspend fun escutar() {
     val modeloCarregado = modelo.await() ?: return
 
-    Recognizer(modeloCarregado, fonteAudio.sampleRate.toFloat(), GRAMATICA).use { recognizer ->
-      // Perfil COMANDO_CURTO do doc §5.1 por padrão, sobrescrevível por AjustesAsr enquanto a
-      // calibração de bancada não fecha. Quando o Marco 2 trocar de gramática por estado,
-      // trocar de perfil é reconfigurar estes três números — não escrever lógica nova.
-      recognizer.setEndpointerDelays(
-          ajustes.silencioAntesDaFalaMs / MS_POR_SEGUNDO,
-          ajustes.silencioFinalMs / MS_POR_SEGUNDO,
-          ajustes.duracaoMaximaMs / MS_POR_SEGUNDO,
-      )
-      // Não precisamos de timestamps por palavra nesta fatia; só do texto final.
-      recognizer.setWords(false)
+    val medidor = MedidorDeNivel(fonteAudio.sampleRate)
 
-      Log.i(TAG, "Escutando (gramática=$GRAMATICA, ${fonteAudio.sampleRate}Hz, $ajustes)")
+    // O último parcial visto, guardado por dois motivos: evitar logar a mesma hipótese
+    // repetida a cada janela, e dar contexto quando o endpointer fecha uma elocução sem
+    // texto final — saber que o decodificador tinha "pa" na mão é o que distingue
+    // "silêncio" de "comando cortado no meio".
+    var ultimoParcial = ""
 
-      val medidor = MedidorDeNivel(fonteAudio.sampleRate)
+    // A janela de endpoint precisa recomeçar quando o sistema para de falar; até lá, o que
+    // entrou no decodificador é o próprio TTS vazando pelo microfone (design.md - Decisão 6).
+    var reiniciarAposFala = false
 
-      // O último parcial visto, guardado por dois motivos: evitar logar a mesma hipótese
-      // repetida a cada janela, e dar contexto quando o endpointer fecha uma elocução sem
-      // texto final — saber que o decodificador tinha "pa" na mão é o que distingue
-      // "silêncio" de "comando cortado no meio".
-      var ultimoParcial = ""
-
+    try {
       fonteAudio.fluxo(TAMANHO_JANELA).collect { janela ->
+        // Trocou de estado nesta janela: a hipótese parcial pertencia ao decodificador que
+        // acabou de ser fechado.
+        if (sincronizarEscuta(modeloCarregado) != null) ultimoParcial = ""
+
+        val recognizer = ativa?.recognizer ?: return@collect
+
+        if (falaEmCurso.value) {
+          reiniciarAposFala = true
+          ultimoParcial = ""
+          return@collect
+        }
+        if (reiniciarAposFala) {
+          recognizer.reset()
+          reiniciarAposFala = false
+        }
+
         if (ajustes.logNivel) {
           medidor.acumular(janela)?.let { Log.d(TAG, "Nível: $it") }
         }
@@ -178,19 +233,90 @@ class ReconhecedorDeComando(
           }
         }
       }
+    } finally {
+      // Roda também no cancelamento: o `Recognizer` é um ponteiro nativo e precisa ser fechado.
+      ativa?.recognizer?.close()
+      ativa = null
     }
   }
 
   /**
-   * Traduz o JSON de resultado do Vosk num evento, quando ele corresponde a um comando.
+   * Aplica a configuração pedida pelo estado, se ela mudou. Roda na thread de áudio.
    *
-   * Silêncio devolve `{"text": ""}` e fala fora da gramática devolve `[unk]` — os dois casos
-   * não publicam nada, que é o que a spec exige em "Fala fora da gramática não produz evento".
+   * @return a escuta recém-criada, ou `null` quando nada mudou desde a janela anterior.
+   */
+  private fun sincronizarEscuta(modelo: Model): EscutaAtiva? {
+    val pedido = solicitada ?: return null
+    if (pedido === ativa?.solicitacao) return null
+
+    ativa?.recognizer?.close()
+
+    val config = pedido.configuracao
+    if (config == null) {
+      Log.i(TAG, "Estado ${nomeDoEstado(pedido.estado)} não escuta comando de voz")
+      ativa = EscutaAtiva(pedido, recognizer = null)
+      return ativa
+    }
+
+    // Uma gramática que o modelo rejeite não pode derrubar a captura nem mexer no estado
+    // (task 3.3): sem reconhecedor, o app segue no mesmo estado e o painel continua servindo.
+    val recognizer =
+        runCatching { criarRecognizer(modelo, config) }
+            .onFailure { Log.e(TAG, "Falha ao criar o reconhecedor; estado segue intacto", it) }
+            .getOrNull()
+
+    Log.i(
+        TAG,
+        "Escutando ${nomeDoEstado(pedido.estado)} v${pedido.versao} " +
+            "(gramática=${config.gramatica ?: "aberta"}, perfil=${config.perfil}, " +
+            "${fonteAudio.sampleRate}Hz)",
+    )
+
+    ativa = EscutaAtiva(pedido, recognizer)
+    return ativa
+  }
+
+  private fun criarRecognizer(modelo: Model, config: ConfiguracaoDeEscuta): Recognizer {
+    val gramatica = config.gramatica
+    val recognizer =
+        if (gramatica == null) Recognizer(modelo, fonteAudio.sampleRate.toFloat())
+        else Recognizer(modelo, fonteAudio.sampleRate.toFloat(), gramatica)
+
+    recognizer.setEndpointerDelays(
+        ajustes.silencioAntesDaFalaMs / MS_POR_SEGUNDO,
+        silencioFinalDe(config.perfil) / MS_POR_SEGUNDO,
+        ajustes.duracaoMaximaMs / MS_POR_SEGUNDO,
+    )
+    // Não precisamos de timestamps por palavra; só do texto final.
+    recognizer.setWords(false)
+    return recognizer
+  }
+
+  /**
+   * O `t_end` do estado, com o arquivo de bancada tendo a última palavra.
+   *
+   * O perfil do doc §5.1 é quem manda no fluxo normal — 280 ms para um comando de uma palavra,
+   * 700 ms para dígitos. Mas [AjustesAsr.silencioFinalMs] existe para calibrar sem recompilar
+   * (o APK de debug tem 127 MB), então quando ele foi de fato alterado no arquivo passa a valer
+   * para todos os estados; enquanto estiver no default, quem decide é o estado.
+   */
+  private fun silencioFinalDe(perfil: PerfilEndpoint): Float {
+    val padrao = PerfilEndpoint.COMANDO_CURTO.silencioFinalMs
+    return if (ajustes.silencioFinalMs == padrao) perfil.silencioFinalMs.toFloat()
+    else ajustes.silencioFinalMs.toFloat()
+  }
+
+  /**
+   * Entrega o resultado final ao [PublicadorDeVoz], com a versão sob a qual ele foi decodificado.
+   *
+   * Silêncio devolve `{"text": ""}` e fala fora da gramática devolve `[unk]`; os dois casos não
+   * publicam nada, que é o que a spec exige em "texto fora do contrato não produz evento".
    *
    * @param parcialAnterior a última hipótese parcial antes de o endpointer fechar. Só serve
    *   para o log; ver por que em [escutar].
    */
   private fun publicar(resultadoJson: String, parcialAnterior: String) {
+    val escuta = ativa ?: return
     val texto = textoDoJson(resultadoJson, CAMPO_TEXTO)
 
     if (texto.isEmpty()) {
@@ -205,18 +331,17 @@ class ReconhecedorDeComando(
       return
     }
 
-    val evento =
-        when (texto) {
-          COMANDO_PARAR -> PickingEvent.ComandoParar
-          COMANDO_REPETIR -> PickingEvent.ComandoRepetir
-          else -> null
-        }
+    val intencao =
+        publicador.publicar(escuta.solicitacao.estado, texto, escuta.solicitacao.versao)
 
     // Loga sempre, inclusive o descartado: é o insumo do plano de calibração do doc §10, que
-    // precisa saber o que o ASR ouviu, não só o que virou evento.
-    Log.i(TAG, "ASR: \"$texto\" -> ${evento?.let { it::class.simpleName } ?: "descartado"}")
-
-    evento?.let { actor.send(it) }
+    // precisa saber o que o ASR ouviu, não só o que virou evento. O check digit esperado
+    // nunca aparece aqui — quem o conhece é o ResolvedorDeIntencao, que não loga.
+    Log.i(
+        TAG,
+        "ASR[${nomeDoEstado(escuta.solicitacao.estado)}]: \"$texto\" -> " +
+            (intencao?.let { it::class.simpleName } ?: "descartado"),
+    )
   }
 
   /**
@@ -228,24 +353,28 @@ class ReconhecedorDeComando(
           .onFailure { Log.e(TAG, "Resultado do Vosk não era JSON: $json", it) }
           .getOrDefault("")
 
+  private fun nomeDoEstado(estado: PickingState) = estado::class.simpleName
+
+  /** O que um estado pede: a versão que ele inaugurou e a configuração de escuta dele. */
+  private class EscutaSolicitada(
+      val versao: Long,
+      val estado: PickingState,
+      val configuracao: ConfiguracaoDeEscuta?,
+  )
+
+  /**
+   * O reconhecedor construído para uma solicitação.
+   *
+   * [recognizer] é `null` nos estados que não escutam e quando a criação falhou — nos dois
+   * casos as amostras continuam sendo lidas e simplesmente não alimentam decodificador nenhum.
+   */
+  private class EscutaAtiva(val solicitacao: EscutaSolicitada, val recognizer: Recognizer?)
+
   private companion object {
     const val TAG = "ReconhecedorDeComando"
 
     /** Diretório do modelo dentro de `assets/` e também dentro do armazenamento do app. */
     const val DIRETORIO_MODELO = "modelo-vosk-pt"
-
-    const val COMANDO_PARAR = "parar"
-    const val COMANDO_REPETIR = "repetir"
-
-    /**
-     * A gramática fixa desta fatia (design.md - Decisão 1).
-     *
-     * **`[unk]` não é opcional.** Uma gramática restrita sem ele obriga o decodificador a
-     * devolver sempre a palavra mais parecida entre as que conhece — qualquer tosse ou
-     * conversa ao lado viraria "parar", e o operador teria a sessão pausada do nada. Com
-     * `[unk]`, o que não é comando é reconhecido como desconhecido e descartado.
-     */
-    const val GRAMATICA = """["$COMANDO_PARAR", "$COMANDO_REPETIR", "[unk]"]"""
 
     /** Campo do texto final no JSON do Vosk. */
     const val CAMPO_TEXTO = "text"

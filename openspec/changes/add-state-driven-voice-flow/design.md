@@ -40,8 +40,8 @@
 | `AguardandoCheckDigit` | dois dígitos | `CheckDigitCorreto` ou `CheckDigitIncorreto` |
 | `EscaneandoProduto` | “cancelar”/transversais | somente evento transversal; código vem da visão |
 | `ConfirmandoQuantidade` | número inteiro permitido | `QuantidadeInformada` |
-| `ReadbackQuantidade` | “confirmar” / “corrigir” | `ReadbackConfirmado` / `ReadbackCorrecaoSolicitada` |
-| `AlocandoCarrinho` | “alocado” | `ItemAlocado` |
+| `ReadbackQuantidade` | “confirmar” / “próximo” / “corrigir” | `ReadbackConfirmado` / `ReadbackConfirmado` / `ReadbackCorrecaoSolicitada` |
+| `AlocandoCarrinho` | “alocado” / “próximo” | `ItemAlocado` |
 | `ItemConcluido` | “próximo” | `ItemFinalizado` com próxima linha resolvida |
 | `ConferenciaFinal` | “concluir” | `ConferenciaConcluida` |
 | `OrdemConcluida` | “encerrar” | `OrdemEncerrada` |
@@ -50,6 +50,25 @@
 disponíveis nos estados operacionais em que o reducer já os aceita. Estados que esperam
 processamento de câmera/rede não recebem uma fala de avanço comum: o produtor que iniciou
 o processamento é o responsável pelo seu resultado.
+
+7. **A exceção de debug para o check digit é só de leitura no painel, nunca de
+   confirmação.** `DevPanelViewModel` passa a expor o valor esperado da posição quando
+   `BuildConfig.DEBUG` é verdadeiro; em release essa fonte de dado nem é lida. Isso não
+   contradiz a Decisão 5 ("não existe confirmação cega") porque nada muda no caminho de
+   validação: o ASR continua comparando os dígitos falados localmente e o painel só
+   ganhou um texto informativo, sem atalho que confirme automaticamente. Alternativa
+   rejeitada: expor só via `Log.d` — descartada porque o fluxo de bancada já lê o painel
+   por `adb exec-out screencap`/`uiautomator dump` sem precisar pedir para o operador
+   olhar a tela, e reaproveita esse mecanismo em vez de exigir `adb logcat` à parte.
+
+8. **"Próximo" é sinônimo aditivo, não substituto, em `AlocandoCarrinho` e
+   `ReadbackQuantidade`.** A palavra nova reduz a carga cognitiva do operador nos passos
+   que só avançam sem dado novo, mas remover "alocado"/"confirmar" invalidaria os números
+   de bancada já registrados para essas palavras — a fatia trata isso como regressão
+   evitável, não como limpeza de vocabulário. Escopo deliberadamente estreito: não se
+   estende a `ItemConcluido` (já é só "próximo"), a `NavegandoParaEndereco`/"cheguei" nem
+   a "corrigir", porque nenhum desses carrega o mesmo padrão "avançar sem novo dado" ou já
+   usa a própria palavra "próximo".
 
 ## Non-goals
 
