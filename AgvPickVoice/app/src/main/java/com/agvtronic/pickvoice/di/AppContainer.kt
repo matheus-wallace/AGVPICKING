@@ -3,6 +3,8 @@ package com.agvtronic.pickvoice.di
 import android.content.Context
 import android.util.Log
 import com.agvtronic.pickvoice.audio.AjustesAsr
+import com.agvtronic.pickvoice.audio.AudioHfpOculos
+// Importada só pelos links de KDoc acima de `fonteAudio`: é a fonte para onde se reverte.
 import com.agvtronic.pickvoice.audio.AudioMicrofoneSimulado
 import com.agvtronic.pickvoice.audio.FonteAudio
 import com.agvtronic.pickvoice.audio.PublicadorDeVoz
@@ -92,10 +94,19 @@ class AppContainer(private val appContext: Context) {
 
   /**
    * A fonte de áudio do doc §5.2, interface-tipada pelo mesmo motivo do [pickingRepository]:
-   * trocar o microfone do celular pelo HFP do óculos na manhã de 18/09 é **esta linha e mais
-   * nenhuma** — é literalmente o que o doc §13.3 exige.
+   * trocar o microfone do celular pelo HFP do óculos era para ser **esta linha e mais nenhuma**
+   * — e foi. A troca do doc §13.3 já aconteceu: o app captura pela rota Bluetooth SCO do
+   * óculos, não mais pelo microfone do aparelho.
+   *
+   * **Para reverter, uma linha:** voltar para `AudioMicrofoneSimulado(ajustesAsr)`. É o
+   * caminho se a bancada com os óculos reais mostrar problema na rota HFP — que ainda não foi
+   * medida — e também o modo normal de desenvolver sem óculos físico por perto, já que
+   * [AudioHfpOculos] simplesmente não captura quando não há SCO disponível.
+   *
+   * [AudioMicrofoneSimulado] continua no código e nos testes justamente por isso; ela não é
+   * legado.
    */
-  val fonteAudio: FonteAudio = AudioMicrofoneSimulado(ajustesAsr)
+  val fonteAudio: FonteAudio = AudioHfpOculos(appContext)
 
   /** Saída substituível: TTS local nesta fatia, Piper/HFP quando essa rota existir. */
   val saidaDeAudio: SaidaDeAudio = SaidaTextToSpeechAndroid(appContext)
