@@ -79,7 +79,6 @@ data class AjustesVisao(
     val limiarEstabilidade: Float = 12f,
     val quadrosEstaveisParaCaptura: Int = 3,
     val cooldownCapturaMs: Int = 1_500,
-    val maxTentativasCaptura: Int = 3,
     val timeoutOrientacaoMs: Int = 8_000,
 ) {
 
@@ -175,12 +174,6 @@ data class AjustesVisao(
               propriedades.inteiroPositivo(
                   "cooldownCapturaMs",
                   padrao.cooldownCapturaMs,
-                  avisar,
-              ),
-          maxTentativasCaptura =
-              propriedades.inteiroPositivo(
-                  "maxTentativasCaptura",
-                  padrao.maxTentativasCaptura,
                   avisar,
               ),
           timeoutOrientacaoMs =

@@ -73,6 +73,29 @@ class ControladorDeFalaTest {
   }
 
   @Test
+  fun `correcao de readback fala novamente a quantidade esperada da linha`() = runTest {
+    val actor = PickingActor(this, PickingState.ConfirmandoQuantidade(item, quantidadeEsperada = 12))
+    val saida = SaidaFake()
+    val controlador =
+        ControladorDeFala(actor, MutableStateFlow(diagnostico()), saida, this)
+
+    controlador.iniciar()
+    advanceUntilIdle()
+    actor.send(PickingEvent.QuantidadeInformada(12))
+    advanceUntilIdle()
+    actor.send(PickingEvent.ReadbackCorrecaoSolicitada)
+    advanceUntilIdle()
+
+    assertEquals(
+        listOf("Colete 12 unidades", "Confirma 12?", "Colete 12 unidades"),
+        saida.mensagens.map { it.texto },
+    )
+    controlador.parar()
+    actor.close()
+    advanceUntilIdle()
+  }
+
+  @Test
   fun `retorno ao primeiro plano nao duplica mensagem do mesmo estado`() = runTest {
     val actor = PickingActor(this, PickingState.EscaneandoProduto(item))
     val saida = SaidaFake()

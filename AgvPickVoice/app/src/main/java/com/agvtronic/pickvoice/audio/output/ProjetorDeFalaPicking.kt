@@ -38,6 +38,11 @@ class ProjetorDeFalaPicking {
                     "Colete ${estado.quantidadeEsperada} " +
                         if (estado.quantidadeEsperada == 1) "unidade" else "unidades",
             )
+        is PickingState.ReadbackQuantidade ->
+            mensagem(
+                chave = "readback-quantidade:${estado.quantidadeInformada}",
+                texto = "Confirma ${estado.quantidadeInformada}?",
+            )
         is PickingState.ItemConcluido -> mensagem("item-concluido", "Item concluído")
         is PickingState.TratandoExcecao ->
             mensagem(
@@ -61,7 +66,6 @@ class ProjetorDeFalaPicking {
         PickingState.AguardandoOrdem,
         is PickingState.DecodificandoProduto,
         is PickingState.ValidandoContraDados,
-        is PickingState.ReadbackQuantidade,
         is PickingState.AlocandoCarrinho,
         is PickingState.ConferenciaFinal,
         is PickingState.SessaoPausada -> null

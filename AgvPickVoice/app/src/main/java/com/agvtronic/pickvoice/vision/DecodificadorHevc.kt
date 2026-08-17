@@ -94,6 +94,26 @@ class DecodificadorHevc(
 
   private val fila = LinkedBlockingQueue<FrameDeEntrada>(CAPACIDADE_DA_FILA)
 
+  /**
+   * Serializa o consumo da [Image] de saída com o encerramento do codec.
+   *
+   * O `ativo` sozinho não protege este trecho: ele é lido **uma vez**, no começo do callback, e o
+   * que vem depois é um recorte que passa alguns milissegundos lendo os planos da imagem — e
+   * esses planos apontam para memória do próprio codec, não para o heap. Um `release()` nessa
+   * janela libera a memória debaixo de quem está lendo, e o processo morre com `SIGSEGV` dentro
+   * do recorte, não com exceção, porque a leitura é nativa (`Memory.peekByte`).
+   *
+   * Aconteceu em bancada em 17/08/2026: o operador disse "avaria", o estado saiu de
+   * `EscaneandoProduto`, `ControladorDeVisao.desligar` chamou `parar()` na main thread e a thread
+   * do codec estava no meio de `recortarParaNv21`.
+   *
+   * O `parar()` espera o recorte em curso terminar, o que custa poucos milissegundos. Só o
+   * caminho da imagem entra aqui: o callback de **entrada** bloqueia até 1 s esperando a fila, e
+   * segurar a trava por todo esse tempo transformaria cada desligamento numa pausa de 1 s na UI.
+   * Lá a proteção continua sendo a exceção de estado do próprio `MediaCodec`, que é de Java.
+   */
+  private val travaDoCodec = Any()
+
   /** Prepara o codec para um stream de [largura] x [altura]. Não bloqueia. */
   fun iniciar(largura: Int, altura: Int) {
     formato =
@@ -158,22 +178,28 @@ class DecodificadorHevc(
     }
   }
 
-  /** Encerra o codec e descarta o que estiver na fila. Idempotente. */
+  /**
+   * Encerra o codec e descarta o que estiver na fila. Idempotente.
+   *
+   * Bloqueia enquanto houver um frame sendo consumido na thread do codec — ver [travaDoCodec].
+   */
   fun parar() {
-    ativo = false
-    fila.clear()
-    runCatching {
-      codec?.stop()
-      codec?.release()
+    synchronized(travaDoCodec) {
+      ativo = false
+      fila.clear()
+      runCatching {
+        codec?.stop()
+        codec?.release()
+      }
+          .onFailure { Log.e(TAG, "Erro ao encerrar o decodificador: ${it.message}", it) }
+      codec = null
+      threadDoCodec?.quit()
+      threadDoCodec = null
+      primeiroFrameDeEntrada = true
+      recebeuKeyframe = false
+      configuracaoEmCache = null
+      avisouImagemNula = false
     }
-        .onFailure { Log.e(TAG, "Erro ao encerrar o decodificador: ${it.message}", it) }
-    codec = null
-    threadDoCodec?.quit()
-    threadDoCodec = null
-    primeiroFrameDeEntrada = true
-    recebeuKeyframe = false
-    configuracaoEmCache = null
-    avisouImagemNula = false
   }
 
   // -----------------------------------------------------------------------------------
@@ -374,23 +400,31 @@ class DecodificadorHevc(
     try {
       if (info.size == 0) return
 
-      val imagem = codec.getOutputImage(index)
-      if (imagem == null) {
-        // A falha silenciosa mais cara possível: o stream sobe, os frames chegam, nada é lido e
-        // não há nada no logcat. Uma vez basta — a cada frame inundaria o log.
-        if (!avisouImagemNula) {
-          avisouImagemNula = true
-          Log.e(
-              TAG,
-              "getOutputImage devolveu null — o codec não entregou YUV420 flexível. " +
-                  "Formato negociado: ${runCatching { codec.outputFormat }.getOrNull()}",
-          )
-        }
-        return
-      }
+      // A imagem só pode ser lida com a trava na mão: os planos dela são memória do codec, e o
+      // recorte que roda dentro do `use` é justamente a janela em que um `release()` concorrente
+      // derrubava o processo. O `ativo` é conferido de novo aqui dentro porque o valor lido lá
+      // em cima já pode ter mudado enquanto se esperava a trava.
+      synchronized(travaDoCodec) {
+        if (!ativo) return
 
-      // O `use` é o ponto de liberação do doc §4.4: a imagem fecha aqui, dê no que der.
-      imagem.use { aoDecodificar?.invoke(it) }
+        val imagem = codec.getOutputImage(index)
+        if (imagem == null) {
+          // A falha silenciosa mais cara possível: o stream sobe, os frames chegam, nada é lido e
+          // não há nada no logcat. Uma vez basta — a cada frame inundaria o log.
+          if (!avisouImagemNula) {
+            avisouImagemNula = true
+            Log.e(
+                TAG,
+                "getOutputImage devolveu null — o codec não entregou YUV420 flexível. " +
+                    "Formato negociado: ${runCatching { codec.outputFormat }.getOrNull()}",
+            )
+          }
+          return
+        }
+
+        // O `use` é o ponto de liberação do doc §4.4: a imagem fecha aqui, dê no que der.
+        imagem.use { aoDecodificar?.invoke(it) }
+      }
     } catch (e: Throwable) {
       Log.e(TAG, "Erro no buffer de saída: ${e.message}", e)
     } finally {

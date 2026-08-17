@@ -78,6 +78,15 @@ object VocabularioDeVoz {
       )
 
   /**
+   * A mesma tabela de dígitos, sem "meia" — segue a regra de [VALOR_DIGITO]/[QUANTIDADES]: em
+   * quantidade a palavra é ambígua, então só vale onde o que se lê é código.
+   */
+  private val VALOR_DIGITO_EM_QUANTIDADE: Map<String, Int> = VALOR_DIGITO - "meia"
+
+  /** Teto de algarismos de uma quantidade falada dígito a dígito — 999 é o máximo aceito. */
+  private const val DIGITOS_MAXIMOS_DA_QUANTIDADE = 3
+
+  /**
    * Palavra falada -> valor, para números de 0 a 999.
    *
    * `linkedMapOf` porque a ordem de inserção vira a ordem das palavras na gramática, e uma
@@ -183,6 +192,26 @@ object VocabularioDeVoz {
       anterior = valor
     }
     return total
+  }
+
+  /**
+   * A quantidade falada algarismo por algarismo ("um dois" -> 12), ou `null` quando a sequência
+   * não é lida assim.
+   *
+   * Complementa [numero], que só entende o número por extenso e recusa "um dois" de propósito —
+   * lá magnitudes não decrescentes são ruído. Aqui a leitura é a mesma de [digitos], mas o
+   * resultado é `Int` e não string: quantidade é número, e o zero à esquerda de "zero cinco"
+   * pode cair sem perder informação.
+   */
+  fun numeroDigitoADigito(texto: String): Int? {
+    val palavras = palavras(texto)
+    if (palavras.isEmpty() || palavras.size > DIGITOS_MAXIMOS_DA_QUANTIDADE) return null
+
+    val algarismos = StringBuilder()
+    for (palavra in palavras) {
+      algarismos.append(VALOR_DIGITO_EM_QUANTIDADE[palavra] ?: return null)
+    }
+    return algarismos.toString().toIntOrNull()
   }
 
   /** Quebra o texto do ASR em palavras minúsculas, sem espaços vazios. */

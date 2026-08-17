@@ -39,6 +39,7 @@ class ProjetorDeOperacao {
             situacao = situacao(estado),
             produto = linha?.let { "${it.produto} — ${it.descricao}" },
             estadoFala = audio.estado,
+            dicaDeVoz = DicaDeComandoDeVoz.dica(estado),
         )
 
     return when (estado) {
@@ -99,7 +100,6 @@ class ProjetorDeOperacao {
               etapa = EtapaOperacao.PRODUTO,
               endereco = estado.itemEmAndamento.endereco,
               instrucao = "Enquadre o código do produto na moldura",
-              mostrarPrevia = true,
               statusLeitura = statusLeitura(visao),
               orientacaoPendente = visao.orientacaoPendente,
           )
@@ -169,11 +169,15 @@ class ProjetorDeOperacao {
           )
 
       is PickingState.TratandoExcecao ->
-          base.mensagem(
-              texto = "Ocorrência de ${descricao(estado.motivo)}",
-              instrucao = "Descreva a ocorrência por voz para registrar",
-              aguardandoVoz = true,
-          )
+          base
+              .mensagem(
+                  texto = "Ocorrência de ${descricao(estado.motivo)}",
+                  instrucao = "Descreva a ocorrência por voz para registrar",
+                  aguardandoVoz = true,
+              )
+              // O único ponto do fluxo em que a tela oferece um toque: aqui a voz precisa de um
+              // relato inteiro, e é o estado em que o operador ficou preso em bancada.
+              .copy(podeRegistrarOcorrencia = true)
 
       is PickingState.ConferenciaFinal ->
           base.mensagem(

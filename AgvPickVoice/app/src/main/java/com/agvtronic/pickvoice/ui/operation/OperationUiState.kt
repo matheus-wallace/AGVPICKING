@@ -31,10 +31,13 @@ enum class EtapaOperacao {
  *
  * @property instrucao o que o operador deve fazer agora. Nos estados de pausa, erro e exceção
  *   é a mensagem de recuperação.
- * @property mostrarPrevia `true` apenas enquanto a câmera pode estar ligada. Fora disso a tela
- *   não hospeda superfície nenhuma, e por isso não há frame anterior a exibir.
  * @property ultimaConfirmacao o último resultado já confirmado pelo fluxo — nunca uma leitura
  *   em andamento.
+ * @property dicaDeVoz a palavra que o operador precisa dizer para avançar, ou `null` nos
+ *   estados que avançam por câmera, rede ou vocabulário aberto ([DicaDeComandoDeVoz]).
+ * @property podeRegistrarOcorrencia `true` só em `TratandoExcecao`, onde a tela oferece uma
+ *   saída por toque. É a única ação de fluxo da tela do operador, e existe porque a exceção é
+ *   justamente o estado em que a voz pode não estar dando conta — ver [OperationViewModel].
  */
 data class OperationUiState(
     val etapa: EtapaOperacao = EtapaOperacao.MENSAGEM,
@@ -50,8 +53,9 @@ data class OperationUiState(
     val ultimaConfirmacao: String? = null,
     val statusLeitura: String? = null,
     val orientacaoPendente: Boolean = false,
-    val mostrarPrevia: Boolean = false,
     val aguardandoVoz: Boolean = false,
     val estadoFala: EstadoSaidaAudio = EstadoSaidaAudio.PARADA,
     val mensagem: String? = null,
+    val dicaDeVoz: String? = null,
+    val podeRegistrarOcorrencia: Boolean = false,
 )

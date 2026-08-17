@@ -19,6 +19,13 @@ data class DevPanelUiState(
     val linhaEmAndamento: Linha? = null,
     val acoes: List<AcaoDev> = emptyList(),
     val diagnosticoAudio: DiagnosticoSaidaAudio = DiagnosticoSaidaAudio(),
+    /**
+     * A senha do endereço da [linhaEmAndamento], só em build de debug (design.md - Decisão 7).
+     *
+     * `null` em release não é "omitido na tela": o `ViewModel` nem lê [Linha.senhaEndereco]
+     * fora de debug, então o valor não circula por `StateFlow` nenhum em produção.
+     */
+    val checkDigitEsperado: String? = null,
 ) {
   /** Nome curto do estado, o que o desenvolvedor lê de relance. */
   val nomeEstado: String

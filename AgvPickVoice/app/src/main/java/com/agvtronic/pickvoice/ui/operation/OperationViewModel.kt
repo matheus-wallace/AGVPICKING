@@ -6,6 +6,7 @@ import com.agvtronic.pickvoice.audio.output.DiagnosticoSaidaAudio
 import com.agvtronic.pickvoice.data.PickingRepository
 import com.agvtronic.pickvoice.data.model.Ordem
 import com.agvtronic.pickvoice.domain.statemachine.PickingActor
+import com.agvtronic.pickvoice.domain.statemachine.PickingEvent
 import com.agvtronic.pickvoice.vision.DiagnosticoVisao
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -17,12 +18,14 @@ import kotlinx.coroutines.launch
 /**
  * Combina os fluxos que a tela do operador precisa e devolve um [OperationUiState] imutável.
  *
- * **Só consome.** Não chama `reduce`, não envia `PickingEvent` e não conhece `Surface`, câmera
- * ou codec: quem produz evento continua sendo voz, visão e DAT (design.md — Decisão 1). A
- * prévia é anexada pelo `MirrorViewModel`, que segue dono das chamadas ao controlador de visão.
+ * **Praticamente só consome.** Não chama `reduce`, não conhece `Surface`, câmera ou codec, e o
+ * fluxo principal continua sendo avançado por voz, visão e DAT (design.md — Decisão 1). A prévia
+ * é anexada pelo `MirrorViewModel`, que segue dono das chamadas ao controlador de visão.
+ *
+ * A única exceção é [registrarOcorrencia] — ver o porquê lá.
  */
 class OperationViewModel(
-    actor: PickingActor,
+    private val actor: PickingActor,
     private val repository: PickingRepository,
     diagnosticoVisao: StateFlow<DiagnosticoVisao>,
     diagnosticoAudio: StateFlow<DiagnosticoSaidaAudio>,
@@ -57,6 +60,21 @@ class OperationViewModel(
       val resumo = repository.ordensDisponiveis().first()
       ordemFlow.value = repository.ordem(resumo.id)
     }
+  }
+
+  /**
+   * Registra a ocorrência em curso e sai de `TratandoExcecao`.
+   *
+   * É o único `PickingEvent` que a tela do operador publica, e é uma saída de emergência
+   * deliberada, não uma volta ao painel de botões: em `TratandoExcecao` o vocabulário é aberto e
+   * a saída por voz exige um relato inteiro reconhecido pelo ASR. Quando isso não acontece — e em
+   * bancada não aconteceu — o operador fica sem nenhuma forma de seguir, porque esta tela não tem
+   * botão de avanço. O mesmo evento que o relato falado produz.
+   *
+   * O reducer ignora o evento em qualquer outro estado, então um toque atrasado não tem efeito.
+   */
+  fun registrarOcorrencia() {
+    actor.send(PickingEvent.ExcecaoRegistrada)
   }
 
   private companion object {

@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -29,16 +30,16 @@ import com.agvtronic.pickvoice.audio.output.EstadoSaidaAudio
  * voz, a câmera ou o ciclo de vida da sessão; a tela apenas mostra em que ponto o fluxo está
  * (spec — "Readback de quantidade").
  *
- * @param previa a prévia espelho, injetada como slot para que a tela não conheça o controlador
- *   de visão. Só é composta na validação de produto: sair dela destrói o `SurfaceView`, o que
- *   remove a superfície e não deixa frame anterior na tela.
+ * A prévia da câmera não é composta aqui: ela é a miniatura flutuante hospedada pela
+ * `MainActivity`, acima de qualquer superfície, para que arrastá-la e dispensá-la valha para a
+ * tela inteira e não se perca a cada troca de etapa.
+ *
  * @param aoAbrirDebug entrada identificada como desenvolvimento; alternar de superfície não
  *   publica evento, não cria sessão e não reinicia áudio.
  */
 @Composable
 fun OperationScreen(
     viewModel: OperationViewModel,
-    previa: @Composable () -> Unit,
     aoAbrirDebug: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -49,7 +50,7 @@ fun OperationScreen(
   ) {
     Cabecalho(uiState)
     Spacer(Modifier.height(12.dp))
-    CartaoDaEtapa(uiState, previa)
+    CartaoDaEtapa(uiState, viewModel::registrarOcorrencia)
     Spacer(Modifier.height(12.dp))
     Rodape(uiState, aoAbrirDebug)
   }
@@ -69,17 +70,25 @@ private fun Cabecalho(uiState: OperationUiState) {
 }
 
 @Composable
-private fun CartaoDaEtapa(uiState: OperationUiState, previa: @Composable () -> Unit) {
+private fun CartaoDaEtapa(uiState: OperationUiState, aoRegistrarOcorrencia: () -> Unit) {
   Card(Modifier.fillMaxWidth()) {
     Column(Modifier.padding(16.dp)) {
       when (uiState.etapa) {
         EtapaOperacao.ENDERECO -> ConteudoEndereco(uiState)
-        EtapaOperacao.PRODUTO -> ConteudoProduto(uiState, previa)
+        EtapaOperacao.PRODUTO -> ConteudoProduto(uiState)
         EtapaOperacao.QUANTIDADE -> ConteudoQuantidade(uiState)
         EtapaOperacao.MENSAGEM -> ConteudoMensagem(uiState)
       }
       Spacer(Modifier.height(12.dp))
       Text(uiState.instrucao, style = MaterialTheme.typography.titleMedium)
+      uiState.dicaDeVoz?.let {
+        Spacer(Modifier.height(4.dp))
+        Text(
+            it,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.secondary,
+        )
+      }
       uiState.ultimaConfirmacao?.let {
         Spacer(Modifier.height(4.dp))
         Text(
@@ -87,6 +96,14 @@ private fun CartaoDaEtapa(uiState: OperationUiState, previa: @Composable () -> U
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.primary,
         )
+      }
+      // A única ação de fluxo da tela, e só na ocorrência: ver `registrarOcorrencia` no
+      // ViewModel. Fora de `TratandoExcecao` a tela continua sem botão de avanço.
+      if (uiState.podeRegistrarOcorrencia) {
+        Spacer(Modifier.height(12.dp))
+        Button(onClick = aoRegistrarOcorrencia, modifier = Modifier.fillMaxWidth()) {
+          Text("Registrar ocorrência e seguir")
+        }
       }
     }
   }
@@ -103,17 +120,10 @@ private fun ConteudoEndereco(uiState: OperationUiState) {
 }
 
 @Composable
-private fun ConteudoProduto(uiState: OperationUiState, previa: @Composable () -> Unit) {
+private fun ConteudoProduto(uiState: OperationUiState) {
   Text("Produto", style = MaterialTheme.typography.labelLarge)
   uiState.produto?.let { Text(it, style = MaterialTheme.typography.titleLarge) }
   uiState.endereco?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
-
-  // A prévia existe só enquanto a câmera pode estar ligada; fora disso não há superfície
-  // hospedada e, portanto, nenhum frame anterior a exibir.
-  if (uiState.mostrarPrevia) {
-    Spacer(Modifier.height(12.dp))
-    previa()
-  }
 
   uiState.statusLeitura?.let {
     Spacer(Modifier.height(8.dp))

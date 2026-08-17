@@ -79,14 +79,15 @@ class PublicadorDeVoz(
    * Nunca bloqueia e nunca suspende — pode ser chamado da thread de áudio.
    *
    * @param versaoDoResultado a versão que valia quando este resultado começou a ser decodificado.
-   * @return a intenção entendida, ou `null` se a fala não significa nada naquele estado. O
-   *   retorno serve ao log de calibração do doc §10; nada do fluxo depende dele.
+   * @return o desfecho da publicação — aceito ou descartado, com o motivo do descarte. Serve ao
+   *   log de calibração do doc §10; nada do fluxo depende dele.
    */
-  fun publicar(estado: PickingState, texto: String, versaoDoResultado: Long): IntencaoDeVoz? {
-    if (versaoDoResultado != versao.get()) return null
-    val intencao = InterpretadorDeFala.interpretar(estado, texto) ?: return null
+  fun publicar(estado: PickingState, texto: String, versaoDoResultado: Long): ResultadoDePublicacao {
+    if (versaoDoResultado != versao.get()) return ResultadoDePublicacao.VersaoObsoleta
+    val intencao =
+        InterpretadorDeFala.interpretar(estado, texto) ?: return ResultadoDePublicacao.ForaDaGramatica
     fila.trySend(Pedido(estado, intencao, versaoDoResultado))
-    return intencao
+    return ResultadoDePublicacao.Aceito(intencao)
   }
 
   private suspend fun atender(pedido: Pedido) {

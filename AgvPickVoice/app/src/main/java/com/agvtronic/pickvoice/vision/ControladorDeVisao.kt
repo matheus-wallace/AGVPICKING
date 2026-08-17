@@ -231,7 +231,19 @@ class ControladorDeVisao(
                 )
             )
             .onFailure { erro, _ -> Log.e(TAG, "addCamera falhou: ${erro.description}") }
-            .getOrNull() ?: return
+            .getOrNull()
+            // Sem isto o diagnóstico ficaria em INICIANDO para sempre, e a miniatura — que
+            // aparece justamente a partir de INICIANDO — ficaria presa na tela mostrando uma
+            // câmera que nunca vai subir.
+            ?: run {
+              _diagnostico.update {
+                it.copy(
+                    estadoStream = EstadoStreamVisao.DESLIGADO,
+                    detalheErro = "Não foi possível abrir a câmera",
+                )
+              }
+              return
+            }
 
     camera = novaCamera
     val novoStream = novaCamera.stream
@@ -490,17 +502,15 @@ class ControladorDeVisao(
           if (codigo != null) {
             publicarFoto(checkNotNull(codigo))
           } else {
-            val esgotou = gatilhoCaptura.registrarFracasso(SystemClock.elapsedRealtime())
+            gatilhoCaptura.registrarFracasso(SystemClock.elapsedRealtime())
             _diagnostico.update {
               it.copy(
                   estadoCaptura =
-                      if (esgotou) EstadoCapturaFoto.ESGOTADA
-                      else if (categoriaErro != null) EstadoCapturaFoto.ERRO
+                      if (categoriaErro != null) EstadoCapturaFoto.ERRO
                       else EstadoCapturaFoto.COOLDOWN,
                   detalheErro = categoriaErro ?: it.detalheErro,
               )
             }
-            if (esgotou) publicarEsgotamento()
           }
         }
   }
@@ -514,14 +524,6 @@ class ControladorDeVisao(
     }
     actor.send(PickingEvent.CapturaDisparada)
     actor.send(PickingEvent.DecodificacaoConcluida(codigo))
-  }
-
-  private fun publicarEsgotamento() {
-    if (jaPublicou) return
-    jaPublicou = true
-    Log.w(TAG, "PHOTO_CAPTURE_EXHAUSTED tentativas=${ajustes.maxTentativasCaptura}")
-    actor.send(PickingEvent.CapturaDisparada)
-    actor.send(PickingEvent.DecodificacaoFalhou)
   }
 
   private fun recortar(imagem: Image): RecorteNv21 {

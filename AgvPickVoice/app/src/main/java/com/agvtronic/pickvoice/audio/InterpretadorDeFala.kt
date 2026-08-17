@@ -41,12 +41,17 @@ object InterpretadorDeFala {
     }
 
     return when (estado) {
+      // "próximo" é sinônimo aditivo de "iniciar" aqui — mesmo evento, mesma consequência
+      // (design.md - Decisão 6 de add-operator-feedback-improvements).
       is PickingState.OrdemCarregada ->
-          IntencaoDeVoz.IniciarNavegacao.takeIf { normalizado == VocabularioDeVoz.INICIAR }
+          IntencaoDeVoz.IniciarNavegacao.takeIf {
+            normalizado == VocabularioDeVoz.INICIAR || normalizado == VocabularioDeVoz.PROXIMO
+          }
 
+      // "próximo" é sinônimo aditivo de "cheguei" aqui (mesma decisão acima).
       is PickingState.NavegandoParaEndereco ->
           evento(PickingEvent.EnderecoAlcancado).takeIf {
-            normalizado == VocabularioDeVoz.CHEGUEI
+            normalizado == VocabularioDeVoz.CHEGUEI || normalizado == VocabularioDeVoz.PROXIMO
           }
 
       // Dois dígitos exatos. Um só é fala cortada; três é ruído somado à fala — nos dois casos
@@ -56,38 +61,58 @@ object InterpretadorDeFala {
               ?.takeIf { it.length == DIGITOS_DO_CHECK_DIGIT }
               ?.let(IntencaoDeVoz::CheckDigitFalado)
 
+      // Por extenso primeiro ("doze"), dígito a dígito depois ("um dois"): o operador usa as duas
+      // leituras, e só a segunda aceita magnitudes não decrescentes — invertê-las faria "um dois"
+      // ser rejeitado por `numero` antes de chegar à leitura que o entende.
       is PickingState.ConfirmandoQuantidade ->
-          VocabularioDeVoz.numero(normalizado)
+          (VocabularioDeVoz.numero(normalizado)
+                  ?: VocabularioDeVoz.numeroDigitoADigito(normalizado))
               ?.takeIf { it in QUANTIDADE_ACEITA }
               ?.let { evento(PickingEvent.QuantidadeInformada(it)) }
 
       is PickingState.ReadbackQuantidade ->
           when (normalizado) {
-            VocabularioDeVoz.CONFIRMAR -> evento(PickingEvent.ReadbackConfirmado)
+            // "próximo" é sinônimo aditivo de "confirmar" aqui — mesmo evento, mesma
+            // consequência (design.md - Decisão 8).
+            VocabularioDeVoz.CONFIRMAR,
+            VocabularioDeVoz.PROXIMO -> evento(PickingEvent.ReadbackConfirmado)
             VocabularioDeVoz.CORRIGIR -> evento(PickingEvent.ReadbackCorrecaoSolicitada)
             else -> null
           }
 
       is PickingState.AlocandoCarrinho ->
-          evento(PickingEvent.ItemAlocado).takeIf { normalizado == VocabularioDeVoz.ALOCADO }
+          evento(PickingEvent.ItemAlocado).takeIf {
+            normalizado == VocabularioDeVoz.ALOCADO || normalizado == VocabularioDeVoz.PROXIMO
+          }
 
       is PickingState.ItemConcluido ->
           IntencaoDeVoz.AvancarParaProximoItem.takeIf { normalizado == VocabularioDeVoz.PROXIMO }
 
       // Vocabulário aberto, mas não passa qualquer coisa: um relato precisa ter forma de
       // relato (design.md - Decisão 2). Uma palavra solta aqui é ruído do galpão.
+      //
+      // A exceção é "próximo": sem ela este estado é o único do fluxo sem saída curta, e o
+      // operador que não conseguisse fazer o ASR entender um relato inteiro ficava preso na
+      // ocorrência — relatado em bancada em 17/08/2026. Vale a mesma palavra de avanço do resto
+      // do fluxo, e o evento é o mesmo do relato: registra a ocorrência e segue.
       is PickingState.TratandoExcecao ->
           evento(PickingEvent.ExcecaoRegistrada).takeIf {
-            VocabularioDeVoz.palavras(normalizado).size >= PALAVRAS_MINIMAS_DO_RELATO
+            normalizado == VocabularioDeVoz.PROXIMO ||
+                VocabularioDeVoz.palavras(normalizado).size >= PALAVRAS_MINIMAS_DO_RELATO
           }
 
+      // "próximo" é sinônimo aditivo de "concluir" aqui (design.md - Decisão 6 de
+      // add-operator-feedback-improvements).
       is PickingState.ConferenciaFinal ->
           evento(PickingEvent.ConferenciaConcluida).takeIf {
-            normalizado == VocabularioDeVoz.CONCLUIR
+            normalizado == VocabularioDeVoz.CONCLUIR || normalizado == VocabularioDeVoz.PROXIMO
           }
 
+      // "próximo" é sinônimo aditivo de "encerrar" aqui (mesma decisão acima).
       is PickingState.OrdemConcluida ->
-          evento(PickingEvent.OrdemEncerrada).takeIf { normalizado == VocabularioDeVoz.ENCERRAR }
+          evento(PickingEvent.OrdemEncerrada).takeIf {
+            normalizado == VocabularioDeVoz.ENCERRAR || normalizado == VocabularioDeVoz.PROXIMO
+          }
 
       is PickingState.SessaoPausada ->
           evento(PickingEvent.SessaoRetomada).takeIf { normalizado == VocabularioDeVoz.RETOMAR }

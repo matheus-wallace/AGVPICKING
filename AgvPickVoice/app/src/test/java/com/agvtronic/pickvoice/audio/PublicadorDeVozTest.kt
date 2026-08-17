@@ -18,7 +18,6 @@ import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -117,12 +116,47 @@ class PublicadorDeVozTest {
     bancada.publicador.novaVersao()
     assertEquals(PickingState.ReadbackQuantidade(item(0), 12), bancada.estado())
 
-    val intencao = bancada.publicador.publicar(estadoDaFala, "quatro", versaoDaFala)
+    val resultado = bancada.publicador.publicar(estadoDaFala, "quatro", versaoDaFala)
     advanceUntilIdle()
 
-    assertNull("o resultado atrasado nem chega a ser interpretado", intencao)
+    assertEquals(
+        "o resultado atrasado nem chega a ser interpretado",
+        ResultadoDePublicacao.VersaoObsoleta,
+        resultado,
+    )
     assertEquals(PickingState.ReadbackQuantidade(item(0), 12), bancada.estado())
   }
+
+  /**
+   * Task 2.3: os dois motivos de descarte (task 2.2) são distinguíveis no retorno de
+   * `publicar`, que é o dado que `ReconhecedorDeComando` loga — o `Log.i` em si não é
+   * testável em JVM (mesmo padrão do gate `BuildConfig.DEBUG` do painel de dev), então a
+   * verificação do texto do log em bancada fica para a task 4.2.
+   */
+  @Test
+  fun `fora da gramatica e versao obsoleta sao descartes distintos e nenhum publica evento`() =
+      runTest {
+        val bancada = bancada(PickingState.ConfirmandoQuantidade(item(0), quantidadeEsperada = 12))
+
+        val versaoDaFala = bancada.publicador.novaVersao()
+        val estadoDaFala = bancada.estado()
+        val foraDaGramatica = bancada.publicador.publicar(estadoDaFala, "abacate", versaoDaFala)
+        advanceUntilIdle()
+
+        assertEquals(ResultadoDePublicacao.ForaDaGramatica, foraDaGramatica)
+        assertEquals(estadoDaFala, bancada.estado())
+
+        // Estado avança antes do endpointer fechar: a versão que valia na fala virou obsoleta.
+        bancada.tocar(PickingEvent.QuantidadeInformada(12))
+        bancada.publicador.novaVersao()
+        val estadoAposAvanco = bancada.estado()
+        val versaoObsoleta =
+            bancada.publicador.publicar(estadoDaFala, "doze", versaoDaFala)
+        advanceUntilIdle()
+
+        assertEquals(ResultadoDePublicacao.VersaoObsoleta, versaoObsoleta)
+        assertEquals(estadoAposAvanco, bancada.estado())
+      }
 
   @Test
   fun `fala fora do contrato do estado nao muda nada`() = runTest {

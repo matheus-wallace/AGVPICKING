@@ -7,6 +7,7 @@ import com.agvtronic.pickvoice.data.model.Linha
 import com.agvtronic.pickvoice.data.model.Ordem
 import com.agvtronic.pickvoice.domain.statemachine.CausaErro
 import com.agvtronic.pickvoice.domain.statemachine.ItemEmAndamento
+import com.agvtronic.pickvoice.domain.statemachine.MotivoExcecao
 import com.agvtronic.pickvoice.domain.statemachine.MotivoPausa
 import com.agvtronic.pickvoice.domain.statemachine.PickingState
 import com.agvtronic.pickvoice.domain.statemachine.TipoCheckDigit
@@ -78,7 +79,6 @@ class ProjetorDeOperacaoTest {
     assertEquals(linha.endereco.etiqueta, navegando.endereco)
     assertEquals("Item 1 de 3", navegando.progresso)
     assertTrue(navegando.aguardandoVoz)
-    assertFalse(navegando.mostrarPrevia)
 
     val checkDigit =
         projetar(PickingState.AguardandoCheckDigit(item, TipoCheckDigit.POSICAO))
@@ -106,7 +106,7 @@ class ProjetorDeOperacaoTest {
   }
 
   @Test
-  fun `escaneamento mostra previa e status sem revelar leitura em andamento`() {
+  fun `escaneamento mostra status sem revelar leitura em andamento`() {
     val emAnalise =
         visao.copy(
             estadoStream = EstadoStreamVisao.ATIVO,
@@ -118,7 +118,6 @@ class ProjetorDeOperacaoTest {
     val estado = projetar(PickingState.EscaneandoProduto(item), emAnalise)
 
     assertEquals(EtapaOperacao.PRODUTO, estado.etapa)
-    assertTrue(estado.mostrarPrevia)
     assertTrue(estado.orientacaoPendente)
     assertEquals("Código em confirmação", estado.statusLeitura)
     // Nem a tentativa corrente nem o código do escaneamento anterior aparecem.
@@ -129,11 +128,10 @@ class ProjetorDeOperacaoTest {
   }
 
   @Test
-  fun `saida do escaneamento remove a previa e mostra o codigo ja confirmado`() {
+  fun `saida do escaneamento mostra o codigo ja confirmado`() {
     val estado = projetar(PickingState.ValidandoContraDados(item, codigoLido = linha.ean))
 
     assertEquals(EtapaOperacao.PRODUTO, estado.etapa)
-    assertFalse(estado.mostrarPrevia)
     assertEquals("Código ${linha.ean} confirmado", estado.ultimaConfirmacao)
   }
 
@@ -171,7 +169,6 @@ class ProjetorDeOperacaoTest {
 
     assertEquals(EtapaOperacao.MENSAGEM, pausada.etapa)
     assertEquals("Sessão pausada", pausada.situacao)
-    assertFalse(pausada.mostrarPrevia)
     assertEquals("Retome a sessão para continuar do mesmo item", pausada.instrucao)
     // O item em andamento sobrevive à pausa, então o progresso continua visível.
     assertEquals("Item 1 de 3", pausada.progresso)
@@ -198,7 +195,22 @@ class ProjetorDeOperacaoTest {
     assertEquals(EtapaOperacao.MENSAGEM, estado.etapa)
     assertEquals("Ordem ${ordem.id} concluída", estado.mensagem)
     assertNull(estado.progresso)
-    assertFalse(estado.mostrarPrevia)
+  }
+
+  @Test
+  fun `so a ocorrencia oferece saida por toque`() {
+    val ocorrencia =
+        projetar(PickingState.TratandoExcecao(MotivoExcecao.AVARIA, item))
+
+    assertTrue(ocorrencia.podeRegistrarOcorrencia)
+    assertEquals(EtapaOperacao.MENSAGEM, ocorrencia.etapa)
+
+    // Todo o resto do fluxo continua sem botão de avanço: a saída por toque é uma válvula de
+    // escape da ocorrência, não uma volta ao painel de botões.
+    assertFalse(projetar(PickingState.NavegandoParaEndereco(item)).podeRegistrarOcorrencia)
+    assertFalse(projetar(PickingState.EscaneandoProduto(item)).podeRegistrarOcorrencia)
+    assertFalse(projetar(PickingState.ReadbackQuantidade(item, 12)).podeRegistrarOcorrencia)
+    assertFalse(projetar(PickingState.ItemConcluido(item)).podeRegistrarOcorrencia)
   }
 
   @Test
