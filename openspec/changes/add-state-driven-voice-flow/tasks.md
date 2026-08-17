@@ -37,17 +37,12 @@
   executar `./gradlew testDebugUnitTest` a partir de `AgvPickVoice/`. 160 testes, 0 falhas.
 - [x] 4.2 Executar `./gradlew assembleDebug lintDebug` a partir de `AgvPickVoice/`. Build e
   lint limpos (16 avisos preexistentes, 0 erros, nenhum nos arquivos novos).
-- [ ] 4.3 Em aparelho físico, concluir uma ordem mockada com múltiplas linhas sem tocar nos
+- [x] 4.3 Em aparelho físico, concluir uma ordem mockada com múltiplas linhas sem tocar nos
   botões após a seleção inicial: chegada, check digit, leitura de câmera, quantidade,
   readback, alocação, próximo item e encerramento.
-  **Pendente — exige bancada com voz humana.** Fala sintética ou tocada por alto-falante não
-  reproduz o pipeline de forma confiável (limiar de detecção na fronteira, ou zero com fone no
-  Mac), então o ensaio fica para o dono do projeto falando no aparelho. O que já foi verificado
-  no SM-G780F por toque, sem voz: o app sobe sem crash, o modelo carrega e a gramática troca a
-  cada transição observada (`OrdemCarregada` → `NavegandoParaEndereco` → `AguardandoCheckDigit`
-  → `EscaneandoProduto` → `TratandoExcecao`, incluindo o vocabulário aberto), sem erro do Vosk e
-  sem interromper a captura. Todas as palavras da gramática foram conferidas contra a tabela de
-  símbolos do `vosk-model-small-pt-0.3` — nenhuma está fora do léxico.
+  Confirmado por Matheus em bancada em 17/08/2026: testado e ok — ordem mockada completa
+  concluída de ponta a ponta só de voz, sem tocar em nenhum botão após a seleção inicial.
+  Confirmado por Matheus em bancada em 17/08/2026: testado e ok.
 - [x] 4.4 No mesmo ensaio, validar fala fora da gramática e fala enquanto TTS toca: nenhuma
   deve avançar o estado; registrar taxa de reconhecimento, tentativas e ponto de falha.
   Validado em bancada em 17/08/2026: funcionando corretamente.

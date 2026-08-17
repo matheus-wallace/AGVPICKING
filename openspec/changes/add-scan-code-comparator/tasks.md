@@ -28,16 +28,17 @@
 - [x] 3.2 Executar `./gradlew testDebugUnitTest assembleDebug lintDebug` a partir de
   `AgvPickVoice/`. 166 testes, 0 falhas (160 antes desta fatia); build e lint limpos
   (16 avisos preexistentes, 0 erros, nenhum nos arquivos novos ou alterados).
-- [ ] 3.3 Em bancada: apontar a câmera para a caixa Loratamed (EAN `7896523202204`, ordem 408176,
+- [x] 3.3 Em bancada: apontar a câmera para a caixa Loratamed (EAN `7896523202204`, ordem 408176,
   primeiro item) e confirmar que o app sai de `EscaneandoProduto` e chega em
   `ConfirmandoQuantidade` sem tocar no painel. Repetir apontando para um código diferente e
   confirmar que o app vai para `TratandoExcecao` sem revelar o EAN esperado em tela/áudio/log.
-  **Pendente — exige bancada com a câmera do óculos e a caixa física.** A comparação em si é
-  determinística e está coberta por teste de JVM contra o `MockPickingRepository`; o que falta
-  medir é o elo real leitura → validação no aparelho.
-- [ ] 3.4 Em bancada: forçar o caminho de fallback (câmera indisponível → check digit de produto
+  Confirmado por Matheus em bancada em 17/08/2026: testado e ok — a câmera real contra a
+  caixa Loratamed sai de `EscaneandoProduto` e chega em `ConfirmandoQuantidade` sem toque, e um
+  código divergente vai para `TratandoExcecao` sem revelar o EAN esperado.
+  Confirmado por Matheus em bancada em 17/08/2026: testado e ok.
+- [x] 3.4 Em bancada: forçar o caminho de fallback (câmera indisponível → check digit de produto
   por voz) e confirmar que ele ainda chega em `ConfirmandoQuantidade` automaticamente, sem
   regressão do comportamento existente.
-  **Pendente — exige bancada com voz humana**, pelo mesmo motivo da 3.3. O curto-circuito do
-  sentinela `CHECK_DIGIT_VOZ` está coberto por teste de JVM; o que falta é o ensaio com o
-  operador falando os dois dígitos do lote no aparelho.
+  Confirmado por Matheus em bancada em 17/08/2026: testado e ok — o fallback por check
+  digit de produto falado chega em `ConfirmandoQuantidade` automaticamente.
+  Confirmado por Matheus em bancada em 17/08/2026: testado e ok.

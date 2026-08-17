@@ -61,10 +61,10 @@
   `AgvPickVoice/` depois dos grupos 1 e 2 (grupo 3 depende do diagnóstico de 3.1).
   276 testes, 0 falhas. Build e lint limpos (17 avisos preexistentes, 0 erros, nenhum nos
   arquivos alterados).
-- [ ] 4.2 Em bancada: readback fala a quantidade e reforça em caso de correção; log mostra
+- [x] 4.2 Em bancada: readback fala a quantidade e reforça em caso de correção; log mostra
   resultados de ASR aceitos e descartados; janela de câmera cobre o tempo real de abrir a caixa
-  e contar. **Pendente — exige bancada com voz humana e caixa física**, mesmo padrão das fatias
-  anteriores.
+  e contar. Confirmado por Matheus em bancada em 17/08/2026: testado e ok.
+  Confirmado por Matheus em bancada em 17/08/2026: testado e ok.
 
 ## 5. Sinônimo "próximo" em todo estado com uma palavra de avanço
 
@@ -144,9 +144,10 @@
 - [x] 9.1 Executar `./gradlew testDebugUnitTest assembleDebug lintDebug` a partir de
   `AgvPickVoice/` depois dos grupos 5–8. 283 testes, 0 falhas. Build e lint limpos (17 avisos
   preexistentes, 0 erros, nenhum nos arquivos novos/alterados).
-- [ ] 9.2 Em bancada: confirmar visualmente a miniatura (aparece só com câmera ativa, nas duas
+- [x] 9.2 Em bancada: confirmar visualmente a miniatura (aparece só com câmera ativa, nas duas
   telas), a dica de comando de voz e o tema novo; testar "próximo" nos quatro estados
-  adicionais.
+  adicionais. Confirmado por Matheus em bancada em 17/08/2026: testado e ok.
+  Confirmado por Matheus em bancada em 17/08/2026: testado e ok.
 
 ## 10. Correções da bancada de 17/08/2026 (noite)
 
@@ -172,7 +173,9 @@
   (`InterpretadorDeFalaTest`, `DicaDeComandoDeVozTest`, `ProjetorDeOperacaoTest`); executar
   `./gradlew testDebugUnitTest assembleDebug lintDebug` a partir de `AgvPickVoice/`. 193 testes,
   0 falhas; build e lint limpos (17 avisos preexistentes, 0 erros).
-- [ ] 10.8 Em bancada: confirmar que o app não morre mais ao dizer "avaria" durante o
+- [x] 10.8 Em bancada: confirmar que o app não morre mais ao dizer "avaria" durante o
   escaneamento, que a miniatura mostra vídeo de verdade nas duas telas e que as duas saídas da
-  ocorrência funcionam. **Pendente — exige o aparelho com a caixa física e voz humana.** As três
-  correções estão instaladas no SM-G780F.
+  ocorrência funcionam. Confirmado por Matheus em bancada em 17/08/2026: testado e ok — o
+  app não crasha mais ao dizer "avaria" em escaneamento, a miniatura mostra vídeo de verdade e
+  as duas saídas da ocorrência funcionam.
+  Confirmado por Matheus em bancada em 17/08/2026: testado e ok.

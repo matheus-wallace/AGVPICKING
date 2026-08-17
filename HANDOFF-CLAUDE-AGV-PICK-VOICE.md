@@ -139,34 +139,33 @@ descartado, sem barge-in.
 
 ## Próximo trabalho recomendado
 
-Nada bloqueado por decisão de design — o que resta é quase todo bancada com voz humana e
-caixa física, e um item de arquitetura (HFP) que precisa de medição no aparelho:
+**Bancada de hoje (17/08/2026), toda confirmada OK por Matheus:** `add-state-driven-voice-flow`
+4.3, `add-scan-code-comparator` 3.3/3.4, `add-operator-feedback-improvements` 4.2/9.2/10.8, e
+`add-unified-picking-operation-screen` 4.4 (o mesmo percurso da 4.3, agora desbloqueado). As
+quatro mudanças estão **✓ Complete** em `openspec list` — nenhuma foi arquivada ainda (mesma
+convenção do projeto: `Complete` não implica arquivado; arquivar só quando Matheus pedir).
 
-1. **Bancada pendente das últimas fatias** (nenhuma requer código novo, só medição):
-   - `add-state-driven-voice-flow` 4.3 — ordem mockada completa, multi-linha, sem tocar em
-     nada após a seleção inicial.
-   - `add-scan-code-comparator` 3.3/3.4 — câmera real contra a caixa Loratamed, e o
-     fallback por check digit de voz chegando em `ConfirmandoQuantidade` sozinho.
-   - `add-operator-feedback-improvements` 4.2/9.2 — readback falado, log de ASR em bancada,
-     miniatura/tema/dica de voz vistos ao vivo.
-   - `add-operator-feedback-improvements` 10.8 — confirmar que os três defeitos corrigidos
-     hoje (crash, preview preto, saída da ocorrência) não voltam com voz humana de verdade.
-2. **HFP dos óculos** (doc §13.3, `AudioHfpOculos`): troca de uma linha em `AppContainer`,
-   mas duas coisas precisam de medição real antes de assumir que funciona — se
-   `VOICE_COMMUNICATION` de fato captura áudio numa rota HFP ao vivo (hoje devolve silêncio
-   digital no microfone do celular), e se o limiar de -27 dBFS calibrado com o microfone do
-   celular ainda vale com o microfone na haste.
-3. **Fatias mais antigas ainda com bancada em aberto** (não fazem parte do trabalho de
-   hoje, mas seguem pendentes): `add-audio-state-feedback` (9/12), `add-photo-capture-decode-fallback`
-   (11/13), `add-vision-mirror-preview` (15/18), `add-vision-stream-decode-slice` (34/35,
-   a tarefa 6.4 fica deliberadamente aberta — sem DataMatrix físico disponível).
-4. Se o modo paisagem virar requisito real (ex.: celular montado no carrinho), tratar a
-   remoção do `android:screenOrientation="portrait"` fixo do `MainActivity` como mudança à
-   parte — a resiliência a paisagem descrita no `design.md` da tela operacional é teórica,
-   porque a orientação está travada em retrato no manifest.
-5. Nenhuma proposta OpenSpec nova está pendente de implementação no momento — todos os
-   `add-*` ativos em `openspec list` já têm a parte de código feita, só falta bancada (ou,
-   no caso das fatias mais antigas do item 3, seguem como estavam).
+O que resta:
+
+1. **HFP dos óculos** (doc §13.3) — **aplicado nesta sessão.** `AudioHfpOculos` implementado
+   (`audio/AudioHfpOculos.kt`) e wireado em `AppContainer` no lugar de `AudioMicrofoneSimulado`.
+   Usa `AudioManager.setCommunicationDevice` sobre o dispositivo Bluetooth SCO (`minSdk = 31`
+   existe por causa dessa API), fonte `VOICE_COMMUNICATION`, 8 kHz direto sem decimação (a
+   captura HFP já sai nessa taxa, doc §2.1). **Ainda precisa de bancada com os óculos reais em
+   HFP** — as duas perguntas em aberto continuam: se `VOICE_COMMUNICATION` captura sinal de
+   verdade numa rota HFP ao vivo (só foi medido sem rota ativa até agora, com o microfone do
+   celular — silêncio digital), e se o limiar de -27 dBFS ainda vale com o microfone na haste.
+   Reverter para `AudioMicrofoneSimulado` é uma linha em `AppContainer` se a bancada mostrar
+   problema.
+2. **Backlog, pós dia 22/08** (decisão de Matheus em 17/08 — não é para agora): a bancada mais
+   antiga ainda aberta em `add-audio-state-feedback` (9/12), `add-photo-capture-decode-fallback`
+   (11/13), `add-vision-mirror-preview` (15/18) e `add-vision-stream-decode-slice` (34/35, a
+   tarefa 6.4 segue deliberadamente aberta — sem DataMatrix físico disponível).
+3. **Modo paisagem: decidido que não é necessário** (Matheus, 17/08) — o app não vai precisar
+   suportar o celular na horizontal. A orientação continua travada em retrato no manifest; não
+   é um item de trabalho, é uma decisão de escopo fechada.
+4. Nenhuma proposta OpenSpec nova está pendente de implementação — todo `add-*` ativo em
+   `openspec list` já tem a parte de código feita.
 
 ## Verificação e execução
 
