@@ -65,6 +65,15 @@ private fun Cabecalho(uiState: OperationUiState) {
         Text(uiState.progresso ?: "—", style = MaterialTheme.typography.bodyMedium)
         Text(uiState.situacao, style = MaterialTheme.typography.bodyMedium)
       }
+      // O passo atual fecha a tríade do cabeçalho: onde estou na ordem (progresso), como está a
+      // sessão (situação) e o que estou fazendo agora (design.md - Decisão 2). Em destaque
+      // porque é a única das três que muda a cada transição.
+      Spacer(Modifier.height(4.dp))
+      Text(
+          uiState.nomeEtapa,
+          style = MaterialTheme.typography.titleSmall,
+          color = MaterialTheme.colorScheme.primary,
+      )
     }
   }
 }

@@ -38,6 +38,10 @@ enum class EtapaOperacao {
  * @property podeRegistrarOcorrencia `true` só em `TratandoExcecao`, onde a tela oferece uma
  *   saída por toque. É a única ação de fluxo da tela do operador, e existe porque a exceção é
  *   justamente o estado em que a voz pode não estar dando conta — ver [OperationViewModel].
+ * @property nomeEtapa o passo da separação em curso, um por `PickingState` e não por [etapa]:
+ *   quatro estados diferentes compartilham o cartão [EtapaOperacao.QUANTIDADE], e era ali que o
+ *   operador se perdia. Nunca contém o check digit esperado, o lote completo nem código ainda não
+ *   confirmado, pela mesma razão do resto deste estado.
  */
 data class OperationUiState(
     val etapa: EtapaOperacao = EtapaOperacao.MENSAGEM,
@@ -58,4 +62,5 @@ data class OperationUiState(
     val mensagem: String? = null,
     val dicaDeVoz: String? = null,
     val podeRegistrarOcorrencia: Boolean = false,
+    val nomeEtapa: String = "",
 )

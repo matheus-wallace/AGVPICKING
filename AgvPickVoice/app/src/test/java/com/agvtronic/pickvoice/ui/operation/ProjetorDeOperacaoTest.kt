@@ -198,6 +198,86 @@ class ProjetorDeOperacaoTest {
   }
 
   @Test
+  fun `os quatro estados do cartao de quantidade tem nomes de etapa distintos`() {
+    // O balde `QUANTIDADE` é onde o operador se perdia: quatro estados, um cartão só, sem rótulo.
+    val nomes =
+        listOf(
+                PickingState.ConfirmandoQuantidade(item, linha.quantidade),
+                PickingState.ReadbackQuantidade(item, quantidadeInformada = 11),
+                PickingState.AlocandoCarrinho(item, quantidadeColetada = 12),
+                PickingState.ItemConcluido(item),
+            )
+            .map { projetar(it) }
+
+    assertTrue("todos deveriam estar no mesmo cartão", nomes.all { it.etapa == EtapaOperacao.QUANTIDADE })
+    val rotulos = nomes.map { it.nomeEtapa }
+    assertTrue("nenhum rótulo pode ficar vazio", rotulos.none { it.isBlank() })
+    assertEquals("os quatro rótulos deveriam ser distintos", rotulos.size, rotulos.toSet().size)
+  }
+
+  @Test
+  fun `os dois check digits tem nomes de etapa distintos e nao revelam a senha`() {
+    val posicao = projetar(PickingState.AguardandoCheckDigit(item, TipoCheckDigit.POSICAO))
+    val produto = projetar(PickingState.AguardandoCheckDigit(item, TipoCheckDigit.PRODUTO))
+
+    // Confirmar que chegou no endereço certo e confirmar o produto pelo lote são coisas
+    // diferentes (design.md - Decisão 3).
+    assertTrue(posicao.nomeEtapa != produto.nomeEtapa)
+    assertFalse(posicao.nomeEtapa.contains(linha.senhaEndereco))
+    assertFalse(produto.nomeEtapa.contains(linha.senhaEndereco))
+  }
+
+  @Test
+  fun `todo estado tem nome de etapa, inclusive fora dos tres cartoes`() {
+    val estados =
+        listOf(
+            PickingState.Ocioso,
+            PickingState.Registrando,
+            PickingState.PreparandoSessao,
+            PickingState.AguardandoOrdem,
+            PickingState.OrdemCarregada(ordem.id, 3),
+            PickingState.NavegandoParaEndereco(item),
+            PickingState.AguardandoCheckDigit(item, TipoCheckDigit.POSICAO),
+            PickingState.EscaneandoProduto(item),
+            PickingState.DecodificandoProduto(item),
+            PickingState.VerificacaoAssistida(item),
+            PickingState.ValidandoContraDados(item, codigoLido = linha.ean),
+            PickingState.ConfirmandoQuantidade(item, linha.quantidade),
+            PickingState.ReadbackQuantidade(item, 11),
+            PickingState.AlocandoCarrinho(item, 12),
+            PickingState.ItemConcluido(item),
+            PickingState.TratandoExcecao(MotivoExcecao.AVARIA, item),
+            PickingState.ConferenciaFinal(ordem.id),
+            PickingState.OrdemConcluida(ordem.id),
+            PickingState.SessaoPausada(PickingState.EscaneandoProduto(item), MotivoPausa.COMANDO_PARAR),
+            PickingState.Erro(CausaErro.BLUETOOTH_DESCONECTADO, estadoAnterior = null),
+        )
+
+    estados.forEach { estado ->
+      val nome = projetar(estado).nomeEtapa
+      assertTrue("$estado ficou sem nome de etapa", nome.isNotBlank())
+      // Nenhum rótulo pode carregar a senha do endereço, em nenhum estado.
+      assertFalse("$estado vazou a senha no rótulo", nome.contains(linha.senhaEndereco))
+    }
+
+    // Pausa, exceção, conferência e ordem concluída não podem se passar por uma das três
+    // validações operacionais.
+    val foraDosCartoes =
+        listOf(
+                PickingState.SessaoPausada(PickingState.EscaneandoProduto(item), MotivoPausa.COMANDO_PARAR),
+                PickingState.TratandoExcecao(MotivoExcecao.AVARIA, item),
+                PickingState.ConferenciaFinal(ordem.id),
+                PickingState.OrdemConcluida(ordem.id),
+            )
+            .map { projetar(it).nomeEtapa }
+
+    assertTrue(
+        foraDosCartoes.toString(),
+        foraDosCartoes.none { it == "Validação da posição" || it == "Coleta e contagem" },
+    )
+  }
+
+  @Test
   fun `so a ocorrencia oferece saida por toque`() {
     val ocorrencia =
         projetar(PickingState.TratandoExcecao(MotivoExcecao.AVARIA, item))
