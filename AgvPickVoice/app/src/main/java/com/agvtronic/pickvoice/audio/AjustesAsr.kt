@@ -59,9 +59,25 @@ import java.util.Properties
  *   fecha uma elocução vazia depois deste tempo e recomeça.
  * @property duracaoMaximaMs o `t_max`: teto duro de uma elocução.
  * @property logParciais loga o resultado parcial do decodificador a cada mudança. É o que torna
- *   visível *o que* o ASR está ouvindo enquanto ouve, em vez de só o que sobrou no fim.
+ *   visível *o que* o ASR está ouvindo enquanto ouve, em vez de só o que sobrou no fim. O
+ *   `MotorSherpaOnnx` não tem parcial nenhum para logar (até o VAD fechar o trecho, nada foi
+ *   decodificado), então lá este ajuste não faz efeito.
  * @property logNivel loga RMS e pico do sinal capturado uma vez por segundo. Responde à
  *   pergunta que veio antes de todas as outras: o microfone está entregando alguma coisa?
+ * @property vadLimiar probabilidade de fala acima da qual o Silero VAD considera a janela como
+ *   voz. É o análogo do limiar de energia calibrado para o Vosk, mas **não é a mesma grandeza**:
+ *   ali eram dBFS de sinal, aqui é a saída de um classificador. Os -27 dBFS de bancada não se
+ *   traduzem para cá, e o default 0.5 é o do próprio sherpa-onnx, não uma medição deste projeto.
+ * @property vadFalaMinimaMs duração mínima de voz para o VAD abrir uma elocução. Existe para o
+ *   VAD não cortar um trecho a cada tosse ou batida de caixa no galpão. Abaixo disso o trecho é
+ *   descartado antes de chegar ao Whisper — se comandos curtos como "parar" sumirem, é este
+ *   número que desce.
+ * @property vadFalaMaximaMs teto duro de uma elocução para o VAD, o análogo de [duracaoMaximaMs]
+ *   do lado do Vosk. Um teto grande custa inferência do Whisper sobre um trecho longo, que é a
+ *   latência que a spec desta mudança avisa ser maior que a do streaming.
+ * @property threadsDeInferencia quantas threads o ONNX Runtime usa por sessão (VAD e Whisper).
+ *   Não afeta o confinamento de thread do pipeline — o paralelismo é interno ao ONNX Runtime, a
+ *   chamada continua vindo só da thread de áudio.
  */
 data class AjustesAsr(
     val degradarCanal: Boolean = true,
@@ -74,6 +90,10 @@ data class AjustesAsr(
     val duracaoMaximaMs: Int = 10_000,
     val logParciais: Boolean = true,
     val logNivel: Boolean = true,
+    val vadLimiar: Float = 0.5f,
+    val vadFalaMinimaMs: Int = 250,
+    val vadFalaMaximaMs: Int = 5_000,
+    val threadsDeInferencia: Int = 2,
 ) {
 
   companion object {
@@ -125,6 +145,11 @@ data class AjustesAsr(
               duracaoMaximaMs = propriedades.inteiro("duracaoMaximaMs", padrao.duracaoMaximaMs),
               logParciais = propriedades.booleano("logParciais", padrao.logParciais),
               logNivel = propriedades.booleano("logNivel", padrao.logNivel),
+              vadLimiar = propriedades.decimal("vadLimiar", padrao.vadLimiar),
+              vadFalaMinimaMs = propriedades.inteiro("vadFalaMinimaMs", padrao.vadFalaMinimaMs),
+              vadFalaMaximaMs = propriedades.inteiro("vadFalaMaximaMs", padrao.vadFalaMaximaMs),
+              threadsDeInferencia =
+                  propriedades.inteiro("threadsDeInferencia", padrao.threadsDeInferencia),
           )
 
       Log.i(TAG, "Ajustes carregados de $NOME_ARQUIVO: $ajustes")

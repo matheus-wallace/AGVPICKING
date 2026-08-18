@@ -8,6 +8,11 @@ import com.agvtronic.pickvoice.audio.AjustesAsr
 import com.agvtronic.pickvoice.audio.AudioHfpOculos
 import com.agvtronic.pickvoice.audio.AudioMicrofoneSimulado
 import com.agvtronic.pickvoice.audio.FonteAudio
+import com.agvtronic.pickvoice.audio.MotorDeAsr
+// Importado só pelos links de KDoc acima de `motorDeAsr`: bancada de 18/08/2026 no TC21
+// derrubou a hipótese a favor dele (ver KDoc), volta a ser candidato numa próxima rodada.
+import com.agvtronic.pickvoice.audio.MotorSherpaOnnx
+import com.agvtronic.pickvoice.audio.MotorVosk
 import com.agvtronic.pickvoice.audio.PublicadorDeVoz
 import com.agvtronic.pickvoice.audio.ReconhecedorDeComando
 import com.agvtronic.pickvoice.audio.ResolvedorDeIntencao
@@ -111,6 +116,23 @@ class AppContainer(private val appContext: Context) {
    */
   val fonteAudio: FonteAudio = AudioMicrofoneSimulado(ajustesAsr)
 
+  /**
+   * Qual decodificador de fala roda, interface-tipado pelo mesmo motivo do [fonteAudio]: trocar
+   * Vosk por sherpa-onnx é **esta linha e mais nenhuma** (add-sherpa-onnx-asr-engine - Decisão 1).
+   *
+   * **As duas implementações existem.** A ativa é [MotorVosk] de novo — a bancada de 18/08/2026
+   * testou [MotorSherpaOnnx] no TC21 com `degradarCanal=false` (áudio cru a 16 kHz, sinal forte,
+   * pico ~-14 dBFS) e o Whisper-tiny ainda alucinou nos comandos curtos da gramática
+   * (`"iniciar"`/`"próximo"` saíram embutidos em texto extra, nunca isolados). Não foi problema
+   * de ganho nem de canal degradado — as duas hipóteses foram descartadas nessa mesma bancada.
+   * O Vosk volta a ser o padrão até o Whisper ganhar outra rodada de medição.
+   *
+   * **Quando o sherpa-onnx for retestado, a troca é uma linha:**
+   * `MotorSherpaOnnx(appContext, ajustesAsr)`. É o mesmo caminho que [AudioHfpOculos] já
+   * percorreu nos dois sentidos em um único dia.
+   */
+  val motorDeAsr: MotorDeAsr = MotorVosk(appContext, ajustesAsr)
+
   /** Saída substituível: TTS local nesta fatia, Piper/HFP quando essa rota existir. */
   val saidaDeAudio: SaidaDeAudio = SaidaTextToSpeechAndroid(appContext)
 
@@ -145,6 +167,7 @@ class AppContainer(private val appContext: Context) {
       ReconhecedorDeComando(
           appContext = appContext,
           fonteAudio = fonteAudio,
+          motor = motorDeAsr,
           actor = pickingActor,
           publicador = publicadorDeVoz,
           falaEmCurso = saidaDeAudio.falando,

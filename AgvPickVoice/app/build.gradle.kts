@@ -40,6 +40,12 @@ android {
     targetCompatibility = JavaVersion.VERSION_17
   }
   packaging { resources { excludes += "/META-INF/{AL2.0,LGPL2.1}" } }
+
+  // Os modelos ONNX vão crus no APK. Comprimidos, o `AssetManager` teria de descomprimir os
+  // 86 MB do decodificador Whisper para a memória a cada carga; crus, o ONNX Runtime lê o
+  // asset direto do APK mapeado. Custa tamanho de APK e economiza RAM e segundos de subida —
+  // e o ganho de compressão sobre peso quantizado int8 é pequeno de qualquer forma.
+  androidResources { noCompress += "onnx" }
 }
 
 kotlin { compilerOptions { jvmTarget = JvmTarget.JVM_17 } }
@@ -58,6 +64,13 @@ dependencies {
   // Vosk — ASR local, offline (doc §5). O modelo pt-BR vive em src/main/assets/, não vem
   // pela dependência: o único modelo publicado no Maven Central é o de inglês.
   implementation(libs.vosk.android)
+
+  // sherpa-onnx — o outro MotorDeAsr (Silero VAD + Whisper). Dependência por ARQUIVO, e não
+  // por coordenada Maven, porque o projeto k2-fsa não publica no Maven Central: o AAR oficial
+  // sai como release asset no GitHub e está vendorizado em `app/libs/`, com SHA-256 registrado
+  // no design.md do change. O JitPack tem builds da mesma tag, mas publica só os módulos de
+  // JVM/desktop — não o AAR de Android.
+  implementation(files("libs/sherpa-onnx-${libs.versions.sherpaOnnx.get()}.aar"))
 
   // ML Kit bundled — passo 1 da cascata de decodificação (doc §6.3). O modelo é empacotado
   // no APK; nada é baixado em runtime, que é o que o §6.3 exige.

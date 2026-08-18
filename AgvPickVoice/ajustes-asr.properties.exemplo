@@ -36,21 +36,49 @@ controleAutomaticoDeGanho=false
 # sinal/ruído — amplifica o ruído junto. Existe para descartar a hipótese, não para resolver.
 ganho=1.0
 
-# t_end do endpointer do Vosk: silêncio depois da fala que fecha a elocução.
+# Silêncio depois da fala que fecha a elocução. Vale para os dois motores: é o t_end do
+# endpointer do Vosk e o min_silence_duration do Silero VAD no sherpa-onnx.
 # 280 ms é o perfil COMANDO_CURTO do doc §5.1. Se o logcat mostrar
 # `Parcial: "pa"` seguido de `elocução fechada sem texto`, é este número que precisa subir.
 silencioFinalMs=280
 
 # t_start_max: sem nenhuma palavra decodificada, o Vosk fecha uma elocução vazia e recomeça.
+# Só o MotorVosk usa — o VAD não tem elocução vazia para reciclar.
 silencioAntesDaFalaMs=5000
 
-# t_max: teto duro de duração de uma elocução.
+# t_max: teto duro de duração de uma elocução. Só o MotorVosk usa; o equivalente do
+# sherpa-onnx é vadFalaMaximaMs.
 duracaoMaximaMs=10000
 
 # Loga a hipótese parcial a cada mudança — é o que mostra o que o ASR está ouvindo.
+# Só o MotorVosk tem parcial: no MotorSherpaOnnx nada é decodificado até o VAD fechar o trecho.
 logParciais=true
 
 # Loga RMS e pico do sinal capturado, uma vez por segundo.
 # Referências medidas no Galaxy S20 FE: silêncio de sala ~-63 dBFS de RMS,
 # voz normal a um palmo ~-28 dBFS de pico, alto-falante do Mac a um metro ~-30 dBFS.
 logNivel=true
+
+# ---------------------------------------------------------------------------------------
+# Só o MotorSherpaOnnx usa daqui para baixo. Com o MotorVosk ativo (o padrão hoje), estas
+# chaves são lidas e ignoradas. NENHUM destes números foi medido em bancada: são os defaults
+# do próprio sherpa-onnx. A tarefa 6.6 do change add-sherpa-onnx-asr-engine é justamente
+# calibrá-los aqui, sem recompilar.
+# ---------------------------------------------------------------------------------------
+
+# Probabilidade de fala acima da qual o Silero VAD considera a janela como voz (0.0 a 1.0).
+# NÃO é o limiar de energia em dBFS calibrado para o Vosk — é a saída de um classificador, e os
+# -27 dBFS de bancada não se traduzem para cá. Subir corta ruído e arrisca perder fala fraca.
+vadLimiar=0.5
+
+# Duração mínima de voz para o VAD abrir uma elocução. Evita que cada tosse ou batida de caixa
+# vire um trecho. Se "parar" e outros comandos curtos sumirem, é este número que desce.
+vadFalaMinimaMs=250
+
+# Teto duro de uma elocução do lado do VAD. Trecho longo custa inferência do Whisper, que é a
+# latência que esta mudança já avisa ser maior que a do streaming do Vosk.
+vadFalaMaximaMs=5000
+
+# Threads que o ONNX Runtime usa por sessão (VAD e Whisper). O pipeline continua chamando o
+# motor de uma thread só — este paralelismo é interno ao ONNX Runtime.
+threadsDeInferencia=2

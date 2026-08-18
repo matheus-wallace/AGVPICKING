@@ -193,10 +193,169 @@ necessários para calibrar o VAD sem recompilar, seguindo o mecanismo já existe
   aplicou toda vez que um componente de áudio mudou (ex.: `AudioHfpOculos`, que pedia
   remedição do mesmo limiar).
 
+## Verificação da API do sherpa-onnx
+
+Executada em 18/08/2026 (tarefas 1.1–1.3), antes de qualquer código de `MotorSherpaOnnx`,
+seguindo a Decisão 5. Mesmo formato do registro que o Vosk já tem em
+`add-audio-single-grammar-slice`: o que era suposição, o que foi confirmado, e contra qual
+artefato real.
+
+**Método.** `javap` sobre o `classes.jar` do `.aar` oficial baixado, cruzado com o
+código-fonte Kotlin e C++ do repositório no **mesmo tag** (`v1.13.5`). Nenhuma afirmação
+abaixo vem de busca web ou de memória — cada uma tem um arquivo real por trás.
+
+### 1.1 Via de dependência — CONFIRMADO, e diferente do que a proposta supunha
+
+| | |
+|---|---|
+| Suposição da proposta | `com.github.k2-fsa:sherpa-onnx-android` num repositório Maven |
+| Confirmado | **Não existe no Maven Central.** Busca na API do Central por `sherpa` devolve 12 artefatos, nenhum do k2-fsa |
+| Artefato real | `sherpa-onnx-1.13.5.aar`, publicado como *release asset* no GitHub |
+| Origem | <https://github.com/k2-fsa/sherpa-onnx/releases/download/v1.13.5/sherpa-onnx-1.13.5.aar> |
+| Tamanho | 49.095.090 bytes (4 ABIs: arm64-v8a 30 MB, armeabi-v7a 21 MB, x86 35 MB, x86_64 34 MB) |
+| SHA-256 | `6419cd8bc983e0c4fab06067f0fe0313fdc0f7103818ac1e7a08d50787b7a82b` |
+| Licença | Apache-2.0 |
+
+O JitPack (`com.github.k2-fsa:sherpa-onnx`) **tem** builds marcados `ok` para a v1.13.5,
+mas os módulos que ele publica são os de JVM/desktop (`sherpa-onnx-jvm`,
+`sherpa-onnx-native-lib-linux-*`, `-osx-*`, `-win-*`) — **não o AAR de Android**. Não serve.
+
+**Decisão: vendorizar o `.aar` em `AgvPickVoice/app/libs/` e depender dele por arquivo**,
+não por coordenada Maven. É o mesmo raciocínio da Decisão 4 sobre baixar modelo em runtime,
+aplicado à dependência: um `git clone` que já compila vale o espaço, e um passo de download
+que pode falhar na manhã de 18/09 não é aceitável. Compilar do código-fonte com NDK, a outra
+via que a Open Question levantava, fica descartada — existe binário oficial, não há motivo.
+
+### 1.2 Superfície da API — CONFIRMADA
+
+Classes reais (`com.k2fsa.sherpa.onnx`), assinaturas verificadas por `javap`:
+
+- **VAD**: `Vad(AssetManager?, VadModelConfig)`, com `acceptWaveform(FloatArray)`,
+  `empty(): Boolean`, `front(): SpeechSegment`, `pop()`, `clear()`, `reset()`, `flush()`,
+  `isSpeechDetected(): Boolean`, `release()`. `SpeechSegment(val start: Int, val samples: FloatArray)`.
+- **Reconhecimento**: `OfflineRecognizer(AssetManager?, OfflineRecognizerConfig)`, com
+  `createStream(): OfflineStream`, `decode(OfflineStream)`, `getResult(OfflineStream): OfflineRecognizerResult`.
+  `OfflineStream.acceptWaveform(FloatArray, Int)` — o `Int` é a taxa de amostragem.
+  `OfflineRecognizerResult.text: String`.
+- **Whisper**: `OfflineWhisperModelConfig(encoder, decoder, language = "en", task = "transcribe",
+  tailPaddings = 1000, ...)` dentro de `OfflineModelConfig(whisper = ..., tokens = ..., modelType = "whisper")`.
+  `language` é onde entra `"pt"`.
+
+**Escala das amostras: `±1.0` normalizado — CONFIRMADO, e é o oposto do Vosk.** O
+`offline-stream.h` documenta literalmente "the range [-1, 1]" sobre `AcceptWaveform`. Ou
+seja, o contrato de `FonteAudio` (`-1.0..1.0`) já é exatamente o que o sherpa-onnx quer:
+**a constante `ESCALA_INT16` que o Vosk exigia não tem equivalente aqui**, e aplicá-la por
+inércia produziria o mesmo tipo de falha silenciosa que custou uma rodada de bancada em
+`add-audio-single-grammar-slice`, só que na direção contrária (saturação em vez de silêncio).
+Era a armadilha que a Decisão 5 mandava conferir; conferida.
+
+**Carga a partir de `assets/`: direta.** Tanto `Vad` quanto `OfflineRecognizer` têm
+construtor que recebe `AssetManager` e resolvem caminhos relativos dentro de `assets/`. Não
+há nada como o `StorageService.sync` do Vosk — **nenhuma cópia de 51 MB para
+`getExternalFilesDir` na primeira execução, e nenhum arquivo `uuid` para manter**. Um passo a
+menos que o modelo Vosk tinha.
+
+### 1.3 Divergências encontradas — três, e duas mudam o desenho
+
+**(a) O VAD exige 16 kHz e a fonte de áudio deste projeto entrega 8 kHz.**
+`silero-vad-model.cc` rejeita qualquer outra taxa: `if (sample_rate_ != 16000) { LOGE(...);
+SHERPA_ONNX_EXIT(-1); }`. A `FonteAudio` deste projeto declara **8000 Hz** nas duas
+implementações — é a taxa do canal HFP do óculos (doc §2.1), reproduzida de propósito pela
+`DegradacaoCanalTelefonico` para que a calibração transfira para o hardware real. Isso não
+era conhecido quando a proposta foi escrita.
+
+Consequência: `MotorSherpaOnnx` **precisa reamostrar 8 kHz → 16 kHz antes do VAD**. Não é
+opcional nem contornável por configuração. O reconhecedor, ao contrário do VAD, reamostra
+sozinho (`offline-stream.cc` cria um `LinearResample` quando a taxa recebida difere da do
+`FeatureConfig`), mas como o trecho já sai do VAD em 16 kHz ele é entregue nessa taxa e
+nenhuma reamostragem dupla acontece.
+
+Vale registrar o limite físico por baixo disso: um sinal que passou por 8 kHz não tem
+conteúdo acima de 4 kHz, e reamostrar não devolve o que a decimação tirou. O Whisper foi
+treinado em 16 kHz de banda cheia. **A troca de motor não elimina essa perda** — ela vem do
+canal HFP, não do decodificador —, o que é mais um motivo para a bancada da tarefa 6.2
+comparar contra o baseline do Vosk em vez de assumir melhora.
+
+**(b) Erro de configuração mata o processo, não lança exceção.**
+`SHERPA_ONNX_EXIT(code)` expande para `_Exit(code)`. Taxa errada, `window_size` errado,
+modelo não reconhecido, metadado ausente — todos terminam o processo **imediatamente**, sem
+exceção Java, sem `try`/`catch`, sem stack trace, sem chance de o app degradar em silêncio
+como faz hoje quando o Vosk falha ao carregar. Um `runCatching` em volta não protege nada.
+
+Consequência: `MotorSherpaOnnx` valida em Kotlin, **antes** de qualquer chamada nativa, tudo
+o que o lado C++ trataria com `_Exit` — presença dos arquivos de modelo em `assets/` e taxa
+de amostragem efetivamente igual a 16000. Isso preserva a garantia da Decisão 6 do
+`add-audio-single-grammar-slice` (falha de ASR não derruba o app, o painel de dev segue
+servindo), que de outro modo estaria perdida.
+
+**(c) O tamanho do Whisper tiny int8 não é o que a Decisão 4 supunha.**
+Medido no pacote oficial `sherpa-onnx-whisper-tiny.tar.bz2` (multilíngue, 116 MB compactado):
+
+| Arquivo | Tamanho |
+|---|---|
+| `tiny-encoder.int8.onnx` | 12.937.772 B (12,3 MB) |
+| `tiny-decoder.int8.onnx` | **89.855.401 B (85,7 MB)** |
+| `tiny-tokens.txt` | 816.730 B (0,8 MB) |
+| **total vendorizado** | **~99 MB** |
+| `silero_vad.onnx` | 643.854 B (0,6 MB) |
+
+A Decisão 4 escolheu tiny sobre base argumentando tamanho ("cada MB a mais custa tempo de
+`installDebug`"). A escolha continua certa — base é ~2× isso —, mas **a premissa de que
+tiny seria pequeno está errada por uma ordem de grandeza**. O decodificador multilíngue
+carrega o vocabulário de 51.865 tokens do Whisper, e é ele, não o encoder, que domina: 86 dos
+99 MB. Somado ao modelo Vosk que a Decisão 1 mantém no binário, o APK de debug sai dos 150 MB
+atuais para a faixa dos 250 MB.
+
+Isso **não invalida** a Decisão 1 (motor reversível) nem a Decisão 4 (tiny como ponto de
+partida) — mas transforma o "[Risco] APK de debug cresce mais ainda" de risco em fato medido,
+e antecipa a consequência que aquele risco já previa: se a bancada aprovar o
+`MotorSherpaOnnx`, remover o Vosk deixa de ser opcional.
+
+### Tamanho do APK de debug — medido, e é o ponto mais duro desta mudança
+
+Medido depois da integração completa (tarefa 5.2), com os dois motores no binário pela
+Decisão 1:
+
+| Build | APK de debug |
+|---|---|
+| Antes desta mudança | 150 MB |
+| **Depois, como está no código** | **370 MB** |
+| Depois, se o build filtrasse ABI para só `arm64-v8a` | 223 MB |
+
+Os +220 MB são ~99 MB de modelos (gravados sem compressão, por `noCompress`, para o ONNX
+Runtime poder ler o asset mapeado em vez de descomprimir 86 MB para a RAM a cada carga) e
+~120 MB de bibliotecas nativas — o AAR traz `libsherpa-onnx-jni.so`, `libonnxruntime.so` e
+companhia para **quatro** ABIs (arm64-v8a, armeabi-v7a, x86, x86_64).
+
+A linha do meio da tabela é uma **medição, não uma mudança aplicada**: o build continua
+empacotando as quatro ABIs, como sempre fez. Filtrar para `arm64-v8a` — a ABI do SM-G780F de
+bancada — devolveria 147 MB, mas é decisão de escopo próprio: mexe em todas as bibliotecas
+nativas do app (Vosk, ML Kit, SDK da Meta), e tiraria o emulador x86_64 da mesa. Fica
+registrado como a alavanca disponível, para ser puxada por quem decidir, não por este change.
+
+Isso realiza o "[Risco] APK de debug cresce mais ainda" com número real e torna concreta a
+consequência que ele já previa: a 370 MB, cada `installDebug` custa vários minutos, e o tempo
+de bancada que resta até 18/09 é justamente o recurso escasso. **Se a bancada aprovar o
+`MotorSherpaOnnx`, remover o Vosk deixa de ser opcional.**
+
+### O que continua sendo suposição, não medição
+
+- Que Whisper tiny int8 reconhece os comandos deste projeto melhor que o Vosk — é a hipótese
+  inteira da mudança, e só a tarefa 6.2 responde.
+- Os parâmetros de VAD (`threshold` 0.5, `minSilenceDuration`, `minSpeechDuration`,
+  `windowSize` 512) partem dos defaults do próprio sherpa-onnx e dos tempos já calibrados para
+  o Vosk (Decisão 6). Nenhum foi medido com voz humana neste pipeline.
+- A qualidade da reamostragem 8→16 kHz escrita para o item (a) — é interpolação linear, a
+  opção mais simples que atende o contrato; se a bancada mostrar que o VAD dispara errado,
+  é o primeiro lugar a olhar.
+
 ## Open Questions
 
-- Artefato do sherpa-onnx: existe um AAR publicado em um repositório Maven confiável para
-  este projeto usar diretamente, ou é preciso compilar a partir do código-fonte (NDK)? Isso
-  muda o esforço de setup e o tempo de build, mas não muda a spec, a decisão de motor
-  trocável, nem a quebra de tarefas — fica para a tarefa de verificação (Decisão 5)
-  responder antes da tarefa de integração começar.
+- ~~Artefato do sherpa-onnx: existe um AAR publicado em um repositório Maven confiável?~~
+  **Respondida** pela verificação acima: não há artefato Maven; há AAR oficial em GitHub
+  Releases, vendorizado em `app/libs/`.
+- A perda de banda do canal HFP (8 kHz, item (a) da verificação) limita qualquer decodificador
+  treinado em 16 kHz, o Whisper inclusive. Se a bancada mostrar que o `MotorSherpaOnnx` não
+  supera o Vosk, a pergunta seguinte deixa de ser "qual modelo" e passa a ser "dá para não
+  degradar o canal" — o que depende do que o HFP do óculos real entrega, e não de escolha de
+  motor. Fora do escopo desta mudança, mas é onde a investigação continua se 6.2 decepcionar.
