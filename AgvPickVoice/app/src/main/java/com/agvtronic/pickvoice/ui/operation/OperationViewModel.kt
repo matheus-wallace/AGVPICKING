@@ -22,7 +22,8 @@ import kotlinx.coroutines.launch
  * fluxo principal continua sendo avançado por voz, visão e DAT (design.md — Decisão 1). A prévia
  * é anexada pelo `MirrorViewModel`, que segue dono das chamadas ao controlador de visão.
  *
- * A única exceção é [registrarOcorrencia] — ver o porquê lá.
+ * As exceções são [registrarOcorrencia] e [confirmarOrdem], os dois estados em que a voz não
+ * tira o operador do lugar — ver o porquê em cada uma.
  */
 class OperationViewModel(
     private val actor: PickingActor,
@@ -66,15 +67,31 @@ class OperationViewModel(
    * Registra a ocorrência em curso e sai de `TratandoExcecao`.
    *
    * É o único `PickingEvent` que a tela do operador publica, e é uma saída de emergência
-   * deliberada, não uma volta ao painel de botões: em `TratandoExcecao` o vocabulário é aberto e
-   * a saída por voz exige um relato inteiro reconhecido pelo ASR. Quando isso não acontece — e em
-   * bancada não aconteceu — o operador fica sem nenhuma forma de seguir, porque esta tela não tem
-   * botão de avanço. O mesmo evento que o relato falado produz.
+   * deliberada, não uma volta ao painel de botões: `TratandoExcecao` é o estado em que o
+   * operador ficou preso em bancada, e esta tela não tem botão de avanço em nenhum outro lugar.
+   * Continua existindo depois de a gramática do estado fechar em "próximo"
+   * (add-voice-recognition-reliability - Decisão 2), porque é por aqui que o detalhe da
+   * ocorrência entra — a voz resolve só o avanço. Publica o mesmo evento que "próximo".
    *
    * O reducer ignora o evento em qualquer outro estado, então um toque atrasado não tem efeito.
    */
   fun registrarOcorrencia() {
     actor.send(PickingEvent.ExcecaoRegistrada)
+  }
+
+  /**
+   * Confirma a ordem mockada já carregada e sai de `AguardandoOrdem`.
+   *
+   * `AguardandoOrdem` é surdo por decisão de projeto — a escolha da ordem é por toque, não por
+   * voz (design.md — Decisão 4), e `SeletorDeEscuta` nem abre escuta ali. Até aqui a confirmação
+   * só existia no painel de desenvolvimento, o que deixava o operador preso na tela principal.
+   *
+   * O reducer só aceita `OrdemConfirmada` a partir de `AguardandoOrdem`, então um toque repetido
+   * ou atrasado não tem efeito. Antes de a ordem carregar não há o que confirmar e o toque é
+   * simplesmente ignorado.
+   */
+  fun confirmarOrdem() {
+    ordemFlow.value?.let { actor.send(PickingEvent.OrdemConfirmada(it.id, it.linhas.size)) }
   }
 
   private companion object {

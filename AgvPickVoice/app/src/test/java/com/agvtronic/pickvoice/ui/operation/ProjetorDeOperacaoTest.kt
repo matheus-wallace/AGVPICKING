@@ -294,6 +294,48 @@ class ProjetorDeOperacaoTest {
   }
 
   @Test
+  fun `so a espera pela ordem oferece o toque de confirmar`() {
+    val esperando = projetar(PickingState.AguardandoOrdem)
+
+    assertTrue(esperando.podeConfirmarOrdem)
+    assertEquals(EtapaOperacao.MENSAGEM, esperando.etapa)
+    // O estado não escuta (design.md — Decisão 4): anunciar espera por voz aqui seria mentira.
+    assertFalse(esperando.aguardandoVoz)
+
+    // Todo o resto do fluxo avança por voz, câmera ou ciclo de vida — nunca por este botão.
+    val demais =
+        listOf(
+            PickingState.Ocioso,
+            PickingState.Registrando,
+            PickingState.PreparandoSessao,
+            PickingState.OrdemCarregada(ordem.id, 3),
+            PickingState.NavegandoParaEndereco(item),
+            PickingState.AguardandoCheckDigit(item, TipoCheckDigit.POSICAO),
+            PickingState.AguardandoCheckDigit(item, TipoCheckDigit.PRODUTO),
+            PickingState.EscaneandoProduto(item),
+            PickingState.DecodificandoProduto(item),
+            PickingState.VerificacaoAssistida(item),
+            PickingState.ValidandoContraDados(item, codigoLido = linha.ean),
+            PickingState.ConfirmandoQuantidade(item, linha.quantidade),
+            PickingState.ReadbackQuantidade(item, 11),
+            PickingState.AlocandoCarrinho(item, 12),
+            PickingState.ItemConcluido(item),
+            PickingState.TratandoExcecao(MotivoExcecao.AVARIA, item),
+            PickingState.ConferenciaFinal(ordem.id),
+            PickingState.OrdemConcluida(ordem.id),
+            PickingState.SessaoPausada(PickingState.EscaneandoProduto(item), MotivoPausa.COMANDO_PARAR),
+            PickingState.Erro(CausaErro.BLUETOOTH_DESCONECTADO, estadoAnterior = null),
+        )
+
+    demais.forEach { estado ->
+      assertFalse("$estado não deveria oferecer o toque", projetar(estado).podeConfirmarOrdem)
+    }
+
+    // E o botão da ocorrência continua exclusivo do seu estado: um não pode ligar o outro.
+    assertFalse(esperando.podeRegistrarOcorrencia)
+  }
+
+  @Test
   fun `sem ordem carregada a tela ainda descreve a sessao`() {
     val estado = projetor.projetar(PickingState.Ocioso, ordem = null, visao = visao, audio = audio)
 

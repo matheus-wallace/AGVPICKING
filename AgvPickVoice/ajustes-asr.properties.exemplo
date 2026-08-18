@@ -22,6 +22,16 @@ degradarCanal=true
 # estiver tocando no mesmo aparelho; até lá ele só atenua o sinal.
 cancelamentoDeEco=false
 
+# NoiseSuppressor sobre a captura. A fonte VOICE_RECOGNITION já traz a supressão que o
+# fabricante considera adequada para ASR; um segundo estágio pode comer fricativas
+# ("sete" virando "ete"). Desligado por padrão — ligue só para medir.
+supressaoDeRuido=false
+
+# AutomaticGainControl sobre a captura. Nivela a fala longe/perto do microfone, mas varia muito
+# entre fabricantes e, quando erra, levanta o ruído de fundo nos silêncios — justo o que confunde
+# o endpointer. Desligado por padrão — ligue só para medir.
+controleAutomaticoDeGanho=false
+
 # Multiplica as amostras antes do decodificador, com clipping em ±1.0. Não melhora a relação
 # sinal/ruído — amplifica o ruído junto. Existe para descartar a hipótese, não para resolver.
 ganho=1.0

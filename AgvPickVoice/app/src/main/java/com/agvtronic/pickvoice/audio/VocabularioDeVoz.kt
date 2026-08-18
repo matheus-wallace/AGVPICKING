@@ -135,6 +135,24 @@ object VocabularioDeVoz {
           "novecentos" to 900,
       )
 
+  /**
+   * [VALOR_NUMERO] restrita a 0..99 — check digit não tem casa de centena, e cada palavra de
+   * centena a mais é um vizinho a mais para o decodificador confundir com um dígito isolado
+   * ("quatro" revisado para "quatrocentos" no meio da fala, bancada de 17/08/2026).
+   */
+  private val VALOR_NUMERO_ATE_NOVENTA_E_NOVE: Map<String, Int> = VALOR_NUMERO.filterValues { it < 100 }
+
+  /**
+   * Valor mínimo de uma palavra falada para abrir uma leitura de check digit por extenso.
+   *
+   * "oito dois" é uma leitura dígito a dígito perfeitamente comum do check digit `82`; sem essa
+   * exigência, [checkDigitExtenso] a leria por extenso e somaria 8 + 2 = 10 — dentro do
+   * intervalo válido, e errado. Exigir que a primeira palavra já valha uma dezena resolve isso e,
+   * de graça, rejeita um algarismo isolado por extenso ("sete" sozinho), ambíguo demais com fala
+   * cortada no meio de um "quarenta e sete" que perdeu a primeira palavra.
+   */
+  private const val MENOR_DEZENA = 10
+
   val TRANSVERSAIS: List<String> =
       listOf(PARAR, EMERGENCIA, REPETIR, AVARIA, RUPTURA, DIVERGENCIA)
 
@@ -146,6 +164,14 @@ object VocabularioDeVoz {
    * linha de separação, incluindo as 106 unidades da ordem mockada de rateio.
    */
   val QUANTIDADES: List<String> = VALOR_NUMERO.keys.toList() + CONECTIVO
+
+  /**
+   * Números falados por extenso restritos a 0..99, para [checkDigitExtenso] — versão de
+   * [QUANTIDADES] sem as ~10 palavras de centena, que não fazem sentido num check digit de dois
+   * algarismos e só existem para confundir o decodificador (doc de design, Decisão 1).
+   */
+  val CHECK_DIGIT_POR_EXTENSO: List<String> =
+      VALOR_NUMERO_ATE_NOVENTA_E_NOVE.keys.toList() + CONECTIVO
 
   /**
    * Os dígitos falados como uma string de algarismos, ou `null` se alguma palavra não for
@@ -192,6 +218,26 @@ object VocabularioDeVoz {
       anterior = valor
     }
     return total
+  }
+
+  /**
+   * O check digit falado por extenso ("quarenta e sete" -> `"47"`), ou `null` quando o texto não
+   * é uma leitura por extenso válida de check digit.
+   *
+   * Reaproveita [numero] em vez de uma tabela própria, e formata com zero à esquerda pelo mesmo
+   * motivo de [digitos]: a comparação com a senha do endereço é literal (doc §7.1). Dois cuidados
+   * que [numero] sozinho não cobre: o intervalo tem que caber num check digit (0..99, checado
+   * aqui) e a primeira palavra falada tem que já valer uma dezena ([MENOR_DEZENA]) — sem isso,
+   * "oito dois" (leitura dígito a dígito de `82`) somaria 8 + 2 = 10 e passaria como extenso
+   * válido.
+   */
+  fun checkDigitExtenso(texto: String): String? {
+    val primeira = palavras(texto).firstOrNull { it != CONECTIVO } ?: return null
+    if ((VALOR_NUMERO[primeira] ?: return null) < MENOR_DEZENA) return null
+
+    val valor = numero(texto) ?: return null
+    if (valor !in 0..99) return null
+    return "%02d".format(valor)
   }
 
   /**

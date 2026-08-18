@@ -150,6 +150,9 @@ class InterpretadorDeFalaTest {
 
   @Test
   fun `quantidade aceita numero por extenso e composto`() {
+    // Restaurado na bancada de 18/08/2026: a leitura por extenso nunca falhou aqui (a saída na
+    // Decisão 7 foi consistência, não sintoma), e a de 18/08 mostrou que só dígito a dígito
+    // também sofre corte — "a todo momento é entendido somente um deles".
     val estado = PickingState.ConfirmandoQuantidade(item, 12)
 
     assertEquals(quantidade(12), interpretar(estado, "doze"))
@@ -179,7 +182,7 @@ class InterpretadorDeFalaTest {
 
     // Acima de três algarismos passa do teto de 999 — não há leitura plausível.
     assertNull(interpretar(estado, "um dois três quatro"))
-    // Nem por extenso nem dígito a dígito: "trinta" não é algarismo.
+    // Nem por extenso nem dígito a dígito: "trinta" não é algarismo, e a dupla não é decrescente.
     assertNull(interpretar(estado, "vinte trinta"))
     // Zero unidade não é coleta: é ruptura, e tem comando próprio.
     assertNull(interpretar(estado, "zero"))
@@ -217,8 +220,34 @@ class InterpretadorDeFalaTest {
 
     assertNull(interpretar(estado, "quatro"))
     assertNull(interpretar(estado, "quatro sete dois"))
-    assertNull(interpretar(estado, "quarenta e sete"))
     assertNull(interpretar(estado, "[unk]"))
+  }
+
+  @Test
+  fun `check digit aceita extenso restaurado na bancada de 18 08`() {
+    // Voltou depois de cair na Decisão 1 (17/08): só dígito a dígito também falhava —
+    // "a todo momento é entendido somente um deles". `checkDigitExtenso` evita o motivo
+    // original da queda restringindo a gramática a 0..99, sem palavra de centena.
+    val estado = PickingState.AguardandoCheckDigit(item, TipoCheckDigit.POSICAO)
+
+    assertEquals(IntencaoDeVoz.CheckDigitFalado("47"), interpretar(estado, "quarenta e sete"))
+    assertEquals(IntencaoDeVoz.CheckDigitFalado("17"), interpretar(estado, "dezessete"))
+    assertEquals(IntencaoDeVoz.CheckDigitFalado("30"), interpretar(estado, "trinta"))
+  }
+
+  @Test
+  fun `check digit por extenso exige que a primeira palavra ja seja dezena`() {
+    // "oito dois" é a leitura dígito a dígito comum de 82; sem essa exigência, checkDigitExtenso
+    // a leria por extenso e somaria 8 + 2 = 10 — dentro do intervalo, e errado. O par decrescente
+    // segue vindo da leitura dígito a dígito, e vale o algarismo lido.
+    val estado = PickingState.AguardandoCheckDigit(item, TipoCheckDigit.POSICAO)
+
+    assertEquals(IntencaoDeVoz.CheckDigitFalado("82"), interpretar(estado, "oito dois"))
+    assertEquals(IntencaoDeVoz.CheckDigitFalado("98"), interpretar(estado, "nove oito"))
+    // E o zero à esquerda continua vindo da leitura dígito a dígito.
+    assertEquals(IntencaoDeVoz.CheckDigitFalado("07"), interpretar(estado, "zero sete"))
+    // Uma centena não faz sentido num check digit de dois algarismos e nem entra na gramática.
+    assertNull(interpretar(estado, "cento e vinte"))
   }
 
   // -----------------------------------------------------------------------------------
@@ -284,26 +313,41 @@ class InterpretadorDeFalaTest {
     )
   }
 
+  /** Scenario: Saída curta por voz */
   @Test
-  fun `relato de excecao precisa ter forma de relato`() {
+  fun `a ocorrencia sai por proximo`() {
     val estado = PickingState.TratandoExcecao(MotivoExcecao.AVARIA, item)
 
     assertEquals(
         IntencaoDeVoz.Direta(PickingEvent.ExcecaoRegistrada),
-        interpretar(estado, "caixa molhada no fundo da prateleira"),
-    )
-    // Palavra solta em vocabulário aberto é ruído do galpão, não relato.
-    assertNull(interpretar(estado, "caixa"))
-    // ...menos "próximo", que é a saída curta da ocorrência (bancada de 17/08/2026).
-    assertEquals(
-        IntencaoDeVoz.Direta(PickingEvent.ExcecaoRegistrada),
         interpretar(estado, "próximo"),
     )
-    // Um transversal continua funcionando mesmo com o vocabulário aberto.
+    // Um transversal continua valendo aqui como em qualquer estado operacional — este estado
+    // não é exceção à regra do doc §3.3.
     assertEquals(
         IntencaoDeVoz.Direta(PickingEvent.ComandoParar),
         interpretar(estado, "parar"),
     )
+    assertEquals(
+        IntencaoDeVoz.Direta(PickingEvent.ExcecaoSolicitada(MotivoExcecao.AVARIA)),
+        interpretar(estado, "avaria"),
+    )
+  }
+
+  /** Scenario: Fala fora do vocabulário não avança */
+  @Test
+  fun `o relato falado livre deixou de ser aceito na ocorrencia`() {
+    // add-voice-recognition-reliability - Decisão 2: `ExcecaoRegistrada` nunca carregou o texto
+    // do relato, e o vocabulário aberto que ele exigia era o que fazia "próximo" virar "prós",
+    // "aqui" ou "faria" no log de bancada. Agora só a palavra de avanço vale.
+    val estado = PickingState.TratandoExcecao(MotivoExcecao.AVARIA, item)
+
+    assertNull(interpretar(estado, "caixa molhada no fundo da prateleira"))
+    assertNull(interpretar(estado, "caixa"))
+    // As transcrições erradas do log de 17/08/2026, que hoje nem chegam a ser transcritas.
+    assertNull(interpretar(estado, "prós"))
+    assertNull(interpretar(estado, "o próximo"))
+    assertNull(interpretar(estado, "[unk]"))
   }
 
   @Test

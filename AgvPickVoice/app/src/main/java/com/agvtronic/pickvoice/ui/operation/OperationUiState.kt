@@ -34,10 +34,15 @@ enum class EtapaOperacao {
  * @property ultimaConfirmacao o último resultado já confirmado pelo fluxo — nunca uma leitura
  *   em andamento.
  * @property dicaDeVoz a palavra que o operador precisa dizer para avançar, ou `null` nos
- *   estados que avançam por câmera, rede ou vocabulário aberto ([DicaDeComandoDeVoz]).
+ *   estados que avançam por câmera, rede ou por dígitos falados ([DicaDeComandoDeVoz]).
  * @property podeRegistrarOcorrencia `true` só em `TratandoExcecao`, onde a tela oferece uma
- *   saída por toque. É a única ação de fluxo da tela do operador, e existe porque a exceção é
- *   justamente o estado em que a voz pode não estar dando conta — ver [OperationViewModel].
+ *   saída por toque. Existe porque a exceção é justamente o estado em que a voz pode não estar
+ *   dando conta — ver [OperationViewModel].
+ * @property podeConfirmarOrdem `true` só em `AguardandoOrdem`, onde a tela oferece o toque que
+ *   confirma e carrega a ordem. Este estado é surdo por decisão de projeto — a escolha da ordem
+ *   é por toque, não por voz (design.md — Decisão 4), e `SeletorDeEscuta` nem abre escuta aqui.
+ *   Antes desta ação a confirmação só existia no painel de desenvolvimento, e o operador ficava
+ *   preso na tela principal sem nenhum jeito de seguir.
  * @property nomeEtapa o passo da separação em curso, um por `PickingState` e não por [etapa]:
  *   quatro estados diferentes compartilham o cartão [EtapaOperacao.QUANTIDADE], e era ali que o
  *   operador se perdia. Nunca contém o check digit esperado, o lote completo nem código ainda não
@@ -62,5 +67,6 @@ data class OperationUiState(
     val mensagem: String? = null,
     val dicaDeVoz: String? = null,
     val podeRegistrarOcorrencia: Boolean = false,
+    val podeConfirmarOrdem: Boolean = false,
     val nomeEtapa: String = "",
 )

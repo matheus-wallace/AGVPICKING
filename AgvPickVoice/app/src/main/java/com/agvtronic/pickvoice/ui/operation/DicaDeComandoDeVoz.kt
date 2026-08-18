@@ -13,8 +13,9 @@ import com.agvtronic.pickvoice.domain.statemachine.PickingState
  *
  * Cobre os estados que avançam por uma palavra de voz (design.md - Decisão 6). Estados que
  * esperam dígitos/número (`AguardandoCheckDigit`, `ConfirmandoQuantidade`) ou que avançam por
- * câmera/rede não têm dica — não há uma palavra fixa para mostrar. `TratandoExcecao` é o caso
- * misto: o relato é livre, mas a saída curta por "próximo" é uma palavra fixa e vale mostrar.
+ * câmera/rede não têm dica — não há uma palavra fixa para mostrar. `TratandoExcecao` deixou de
+ * ser o caso misto de relato livre + saída curta: a gramática dele fechou em "próximo"
+ * (add-voice-recognition-reliability - Decisão 2), então a dica é a mesma dos demais.
  */
 object DicaDeComandoDeVoz {
 
@@ -26,10 +27,7 @@ object DicaDeComandoDeVoz {
         is PickingState.ReadbackQuantidade ->
             "Diga: ${VocabularioDeVoz.CONFIRMAR} ou ${VocabularioDeVoz.CORRIGIR}"
         is PickingState.ItemConcluido -> dizer(VocabularioDeVoz.PROXIMO)
-        // O vocabulário aqui é aberto — a dica mostra a saída curta, não o relato, que é livre
-        // por definição e não tem palavra fixa para exibir.
-        is PickingState.TratandoExcecao ->
-            "Descreva a ocorrência ou diga: ${VocabularioDeVoz.PROXIMO}"
+        is PickingState.TratandoExcecao -> dizer(VocabularioDeVoz.PROXIMO)
         is PickingState.ConferenciaFinal -> dizer(VocabularioDeVoz.CONCLUIR)
         is PickingState.OrdemConcluida -> dizer(VocabularioDeVoz.ENCERRAR)
         else -> null

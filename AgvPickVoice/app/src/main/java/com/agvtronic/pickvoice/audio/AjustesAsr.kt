@@ -39,6 +39,15 @@ import java.util.Properties
  *   referência de playback, e sobre uma sessão `VOICE_RECOGNITION` sem nada tocando ele não tem
  *   o que cancelar — em vários aparelhos o efeito só atenua o sinal. Volta a fazer sentido
  *   quando o TTS do doc §5.4 existir e tocar no mesmo aparelho.
+ * @property supressaoDeRuido liga o [android.media.audiofx.NoiseSuppressor] sobre a captura.
+ *   **Desligado por padrão**: `VOICE_RECOGNITION` já entrega o sinal com a supressão que o
+ *   fabricante considera adequada para ASR, e um segundo estágio pode comer fricativas ("sete"
+ *   virando "ete") em vez de melhorar. Existe para medir em bancada, não porque se espera que
+ *   ajude — mesma cautela que fez o AEC deixar de ser padrão.
+ * @property controleAutomaticoDeGanho liga o [android.media.audiofx.AutomaticGainControl] sobre
+ *   a captura. **Desligado por padrão** pelo mesmo motivo, agravado por o AGC variar muito entre
+ *   fabricantes: quando erra, ele levanta o ruído de fundo junto com a fala nos silêncios, que é
+ *   exatamente o que confunde o endpointer.
  * @property ganho multiplica as amostras antes de entregá-las ao decodificador, com clipping em
  *   `±1.0`. **Não melhora a relação sinal/ruído** — amplifica o ruído junto — e o Kaldi já
  *   normaliza a média cepstral, então `1.0` deve continuar sendo o valor certo. Existe para
@@ -57,6 +66,8 @@ import java.util.Properties
 data class AjustesAsr(
     val degradarCanal: Boolean = true,
     val cancelamentoDeEco: Boolean = false,
+    val supressaoDeRuido: Boolean = false,
+    val controleAutomaticoDeGanho: Boolean = false,
     val ganho: Float = 1f,
     val silencioFinalMs: Int = PerfilEndpoint.COMANDO_CURTO.silencioFinalMs,
     val silencioAntesDaFalaMs: Int = 5_000,
@@ -100,6 +111,13 @@ data class AjustesAsr(
               degradarCanal = propriedades.booleano("degradarCanal", padrao.degradarCanal),
               cancelamentoDeEco =
                   propriedades.booleano("cancelamentoDeEco", padrao.cancelamentoDeEco),
+              supressaoDeRuido =
+                  propriedades.booleano("supressaoDeRuido", padrao.supressaoDeRuido),
+              controleAutomaticoDeGanho =
+                  propriedades.booleano(
+                      "controleAutomaticoDeGanho",
+                      padrao.controleAutomaticoDeGanho,
+                  ),
               ganho = propriedades.decimal("ganho", padrao.ganho),
               silencioFinalMs = propriedades.inteiro("silencioFinalMs", padrao.silencioFinalMs),
               silencioAntesDaFalaMs =

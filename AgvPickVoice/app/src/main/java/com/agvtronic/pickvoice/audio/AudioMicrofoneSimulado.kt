@@ -5,6 +5,8 @@ import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaRecorder
 import android.media.audiofx.AcousticEchoCanceler
+import android.media.audiofx.AutomaticGainControl
+import android.media.audiofx.NoiseSuppressor
 import android.util.Log
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.flow.Flow
@@ -42,6 +44,15 @@ import kotlinx.coroutines.isActive
  * *tocado* a partir de uma referência de playback, e enquanto não existe TTS não há nada para
  * cancelar — só um estágio a mais no caminho do sinal, capaz de atenuá-lo. Ele volta por
  * [AjustesAsr.cancelamentoDeEco], e volta a ser padrão quando a saída por voz existir.
+ *
+ * ### Os três efeitos nativos são toggles, nenhum é padrão
+ *
+ * [NoiseSuppressor] e [AutomaticGainControl] entram pelo mesmo caminho do AEC —
+ * [AjustesAsr.supressaoDeRuido] e [AjustesAsr.controleAutomaticoDeGanho] —, também desligados
+ * por padrão. A lição do AEC é justamente essa: um efeito nativo de áudio pode piorar o sinal
+ * em vez de melhorar, e a única forma de saber é medir com voz humana no aparelho. Como os
+ * ajustes vêm de `ajustes-asr.properties`, testar uma combinação custa um `adb push` e um
+ * `force-stop`, não um `installDebug` de 127 MB.
  *
  * @param ajustes calibração de bancada; ver [AjustesAsr]. Os defaults são o comportamento de
  *   produção, então construir sem argumento é o caminho normal.
@@ -100,6 +111,11 @@ class AudioMicrofoneSimulado(private val ajustes: AjustesAsr = AjustesAsr()) : F
 
     val aec =
         if (ajustes.cancelamentoDeEco) ligarCancelamentoDeEco(recorder.audioSessionId) else null
+    val supressor =
+        if (ajustes.supressaoDeRuido) ligarSupressaoDeRuido(recorder.audioSessionId) else null
+    val agc =
+        if (ajustes.controleAutomaticoDeGanho) ligarControleDeGanho(recorder.audioSessionId)
+        else null
 
     try {
       recorder.startRecording()
@@ -107,7 +123,8 @@ class AudioMicrofoneSimulado(private val ajustes: AjustesAsr = AjustesAsr()) : F
       Log.i(
           TAG,
           "Captura aberta: ${SAMPLE_RATE_CAPTURA}Hz -> ${sampleRate}Hz " +
-              "(degradação=${ajustes.degradarCanal}, aec=${aec != null})",
+              "(degradação=${ajustes.degradarCanal}, aec=${aec != null}, " +
+              "ns=${supressor != null}, agc=${agc != null})",
       )
 
       val bufferPcm = ShortArray(amostrasPorLeitura)
@@ -130,7 +147,11 @@ class AudioMicrofoneSimulado(private val ajustes: AjustesAsr = AjustesAsr()) : F
       }
     } finally {
       // Roda também no cancelamento do coletor, que é justamente como este fluxo termina.
+      // Cada efeito segura um slot no servidor de áudio até ser liberado: sem isto, a próxima
+      // sessão de captura pode não conseguir criar o mesmo efeito.
       aec?.release()
+      supressor?.release()
+      agc?.release()
       runCatching { recorder.stop() }
       recorder.release()
     }
@@ -149,6 +170,36 @@ class AudioMicrofoneSimulado(private val ajustes: AjustesAsr = AjustesAsr()) : F
       return null
     }
     return AcousticEchoCanceler.create(audioSessionId)?.apply { enabled = true }
+  }
+
+  /**
+   * Liga a supressão de ruído de hardware quando o aparelho tem.
+   *
+   * Mesmo molde do [ligarCancelamentoDeEco], e pelo mesmo motivo: só é chamado quando
+   * [AjustesAsr.supressaoDeRuido] pede, a ausência do efeito no aparelho não é erro, e o
+   * default é desligado até a bancada medir se ajuda ou atrapalha.
+   */
+  private fun ligarSupressaoDeRuido(audioSessionId: Int): NoiseSuppressor? {
+    if (!NoiseSuppressor.isAvailable()) {
+      Log.i(TAG, "Supressão de ruído indisponível neste aparelho; seguindo sem")
+      return null
+    }
+    return NoiseSuppressor.create(audioSessionId)?.apply { enabled = true }
+  }
+
+  /**
+   * Liga o controle automático de ganho de hardware quando o aparelho tem.
+   *
+   * Mesmo molde do [ligarCancelamentoDeEco]. É o efeito com maior variação entre fabricantes
+   * dos três, então é também o que mais depende do resultado de bancada antes de qualquer
+   * mudança de default (ver [AjustesAsr.controleAutomaticoDeGanho]).
+   */
+  private fun ligarControleDeGanho(audioSessionId: Int): AutomaticGainControl? {
+    if (!AutomaticGainControl.isAvailable()) {
+      Log.i(TAG, "Controle automático de ganho indisponível neste aparelho; seguindo sem")
+      return null
+    }
+    return AutomaticGainControl.create(audioSessionId)?.apply { enabled = true }
   }
 
   private companion object {

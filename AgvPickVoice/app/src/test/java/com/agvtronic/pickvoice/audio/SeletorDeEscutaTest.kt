@@ -124,12 +124,66 @@ class SeletorDeEscutaTest {
   }
 
   @Test
-  fun `excecao e o unico estado de vocabulario aberto`() {
+  fun `a ocorrencia escuta gramatica fechada de proximo, como os demais avancos`() {
+    // add-voice-recognition-reliability - Decisão 2: era o único estado de vocabulário aberto,
+    // e o log de bancada mostrou o decodificador aberto errando "próximo" onde toda gramática
+    // fechada do mesmo log acertava de primeira.
     val config = SeletorDeEscuta.para(PickingState.TratandoExcecao(MotivoExcecao.AVARIA, item))
 
-    assertTrue(config?.aberta == true)
-    assertEquals(PerfilEndpoint.TEXTO_LIVRE, config?.perfil)
-    assertNull("vocabulário aberto não tem gramática", config?.gramatica)
+    assertFalse("a gramática da ocorrência não é mais aberta", config!!.aberta)
+    assertEquals(PerfilEndpoint.COMANDO_CURTO, config.perfil)
+    assertTrue(config.palavras.contains(VocabularioDeVoz.PROXIMO))
+    assertTrue(config.palavras.containsAll(VocabularioDeVoz.TRANSVERSAIS))
+    assertNotNull(config.gramatica)
+  }
+
+  @Test
+  fun `nenhum estado usa vocabulario aberto`() {
+    // A mecânica de vocabulário aberto continua existindo em `ConfiguracaoDeEscuta` para a
+    // fatia de relato via LLM (doc §5.4), mas hoje nenhum estado a usa.
+    val estados =
+        listOf(
+            PickingState.OrdemCarregada("274K5010000-408176", 3),
+            PickingState.NavegandoParaEndereco(item),
+            PickingState.AguardandoCheckDigit(item, TipoCheckDigit.POSICAO),
+            PickingState.EscaneandoProduto(item),
+            PickingState.ConfirmandoQuantidade(item, 12),
+            PickingState.ReadbackQuantidade(item, 12),
+            PickingState.AlocandoCarrinho(item, 12),
+            PickingState.ItemConcluido(item),
+            PickingState.TratandoExcecao(MotivoExcecao.AVARIA, item),
+            PickingState.ConferenciaFinal("274K5010000-408176"),
+            PickingState.OrdemConcluida("274K5010000-408176"),
+            PickingState.SessaoPausada(
+                PickingState.NavegandoParaEndereco(item),
+                MotivoPausa.COMANDO_PARAR,
+            ),
+        )
+
+    estados.forEach { estado ->
+      val config = SeletorDeEscuta.para(estado)
+      assertFalse("$estado não deveria ter vocabulário aberto", config!!.aberta)
+    }
+  }
+
+  @Test
+  fun `check digit escuta digitos, extenso restrito a 0 e 99, e transversais`() {
+    // A gramática somou as palavras de dezena/centena, para aceitar "quarenta e sete", e a
+    // bancada de 17/08/2026 reverteu (add-voice-recognition-reliability - Decisão 1): a
+    // gramática de 0-999 inteira fazia "quatro" ser revisado para "quatrocentos" no meio da
+    // fala. Voltou na bancada de 18/08/2026 sem repetir o motivo: `CHECK_DIGIT_POR_EXTENSO` é
+    // restrito a 0..99, sem palavra de centena.
+    val palavras =
+        SeletorDeEscuta.para(PickingState.AguardandoCheckDigit(item, TipoCheckDigit.POSICAO))
+            ?.palavras
+
+    assertEquals(
+        VocabularioDeVoz.DIGITOS +
+            VocabularioDeVoz.CHECK_DIGIT_POR_EXTENSO +
+            VocabularioDeVoz.TRANSVERSAIS,
+        palavras,
+    )
+    assertTrue("não deve ter palavra de centena", palavras?.none { it == "cem" || it == "cento" } == true)
   }
 
   @Test

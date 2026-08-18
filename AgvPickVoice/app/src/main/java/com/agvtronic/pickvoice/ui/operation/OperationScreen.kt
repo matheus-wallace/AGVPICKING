@@ -26,9 +26,10 @@ import com.agvtronic.pickvoice.audio.output.EstadoSaidaAudio
 /**
  * A tela do separador: uma superfície só para as três validações do WMS.
  *
- * Informativa por definição — não existe botão de avanço do fluxo principal. Quem avança é a
- * voz, a câmera ou o ciclo de vida da sessão; a tela apenas mostra em que ponto o fluxo está
- * (spec — "Readback de quantidade").
+ * Informativa por definição — o fluxo principal não avança por botão. Quem avança é a voz, a
+ * câmera ou o ciclo de vida da sessão; a tela apenas mostra em que ponto o fluxo está
+ * (spec — "Readback de quantidade"). As duas exceções são os estados em que a voz não resolve:
+ * a confirmação da ordem, que é por toque por decisão de projeto, e o registro da ocorrência.
  *
  * A prévia da câmera não é composta aqui: ela é a miniatura flutuante hospedada pela
  * `MainActivity`, acima de qualquer superfície, para que arrastá-la e dispensá-la valha para a
@@ -50,7 +51,7 @@ fun OperationScreen(
   ) {
     Cabecalho(uiState)
     Spacer(Modifier.height(12.dp))
-    CartaoDaEtapa(uiState, viewModel::registrarOcorrencia)
+    CartaoDaEtapa(uiState, viewModel::registrarOcorrencia, viewModel::confirmarOrdem)
     Spacer(Modifier.height(12.dp))
     Rodape(uiState, aoAbrirDebug)
   }
@@ -79,7 +80,11 @@ private fun Cabecalho(uiState: OperationUiState) {
 }
 
 @Composable
-private fun CartaoDaEtapa(uiState: OperationUiState, aoRegistrarOcorrencia: () -> Unit) {
+private fun CartaoDaEtapa(
+    uiState: OperationUiState,
+    aoRegistrarOcorrencia: () -> Unit,
+    aoConfirmarOrdem: () -> Unit,
+) {
   Card(Modifier.fillMaxWidth()) {
     Column(Modifier.padding(16.dp)) {
       when (uiState.etapa) {
@@ -106,12 +111,19 @@ private fun CartaoDaEtapa(uiState: OperationUiState, aoRegistrarOcorrencia: () -
             color = MaterialTheme.colorScheme.primary,
         )
       }
-      // A única ação de fluxo da tela, e só na ocorrência: ver `registrarOcorrencia` no
-      // ViewModel. Fora de `TratandoExcecao` a tela continua sem botão de avanço.
+      // As duas únicas ações de fluxo da tela, cada uma no seu estado: ver `registrarOcorrencia`
+      // e `confirmarOrdem` no ViewModel. No resto do fluxo a tela continua sem botão de avanço —
+      // quem avança é a voz, a câmera ou o ciclo de vida da sessão.
       if (uiState.podeRegistrarOcorrencia) {
         Spacer(Modifier.height(12.dp))
         Button(onClick = aoRegistrarOcorrencia, modifier = Modifier.fillMaxWidth()) {
           Text("Registrar ocorrência e seguir")
+        }
+      }
+      if (uiState.podeConfirmarOrdem) {
+        Spacer(Modifier.height(12.dp))
+        Button(onClick = aoConfirmarOrdem, modifier = Modifier.fillMaxWidth()) {
+          Text("Confirmar ordem")
         }
       }
     }

@@ -25,7 +25,7 @@ class ProjetorDeFalaPicking {
         is PickingState.AguardandoCheckDigit ->
             when (estado.tipo) {
               TipoCheckDigit.POSICAO ->
-                  mensagem("confirmar-posicao", "Confirme a posição")
+                  mensagem("confirmar-endereco", "Confirme o endereço")
               TipoCheckDigit.PRODUTO ->
                   mensagem("confirmar-produto", "Confirme o produto")
             }
@@ -47,7 +47,7 @@ class ProjetorDeFalaPicking {
         is PickingState.TratandoExcecao ->
             mensagem(
                 chave = "excecao:${estado.motivo.name}",
-                texto = "Atenção. Descreva a ocorrência",
+                texto = "Atenção. Diga próximo para registrar a ocorrência",
                 prioridade = PrioridadeFala.CRITICA,
             )
         is PickingState.OrdemConcluida ->

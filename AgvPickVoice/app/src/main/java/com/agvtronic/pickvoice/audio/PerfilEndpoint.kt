@@ -24,6 +24,14 @@ enum class PerfilEndpoint(val silencioFinalMs: Int) {
   /** Quantidade e check digit: precisa tolerar a micropausa entre dígitos (doc §5.1). */
   DIGITOS(700),
 
-  /** Relato de exceção, onde o operador formula a frase enquanto fala. */
+  /**
+   * Relato de exceção, onde o operador formula a frase enquanto fala.
+   *
+   * **Sem estado que o use hoje.** `TratandoExcecao` era o único, e passou a gramática fechada
+   * com [COMANDO_CURTO] (add-voice-recognition-reliability - Decisão 2). O valor fica aqui, e
+   * não é removido, porque a tabela é a do doc §5.1 e o perfil volta a ter dono na fatia de
+   * relato de ocorrência via LLM (doc §5.4) — apagá-lo agora só faria a tabela deixar de
+   * espelhar o documento.
+   */
   TEXTO_LIVRE(900),
 }

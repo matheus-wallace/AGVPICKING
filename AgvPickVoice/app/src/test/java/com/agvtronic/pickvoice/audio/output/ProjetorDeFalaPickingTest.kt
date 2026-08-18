@@ -56,7 +56,7 @@ class ProjetorDeFalaPickingTest {
     val produto =
         projetor.projetar(PickingState.AguardandoCheckDigit(item, TipoCheckDigit.PRODUTO))!!
 
-    assertEquals("Confirme a posição", posicao.texto)
+    assertEquals("Confirme o endereço", posicao.texto)
     assertEquals("Confirme o produto", produto.texto)
     assertFalse(posicao.texto.contains("05"))
   }

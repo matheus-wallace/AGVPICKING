@@ -6,8 +6,10 @@ package com.agvtronic.pickvoice.audio
  * É a saída do [SeletorDeEscuta] e a única coisa que o [ReconhecedorDeComando] precisa saber
  * para construir um `Recognizer` — nenhuma regra de domínio atravessa para o lado do Vosk.
  *
- * @property palavras vocabulário fechado do estado. Vazio significa vocabulário **aberto**, o
- *   caso único do relato de exceção (design.md - Decisão 2).
+ * @property palavras vocabulário fechado do estado. Vazio significa vocabulário **aberto** —
+ *   um caminho que hoje nenhum estado usa, desde que `TratandoExcecao` fechou a gramática
+ *   (add-voice-recognition-reliability - Decisão 2). Continua suportado porque a fatia de
+ *   relato de ocorrência via LLM (doc §5.4) volta a precisar dele.
  * @property perfil quanto silêncio fecha a elocução neste estado (doc §5.1).
  */
 data class ConfiguracaoDeEscuta(
@@ -15,7 +17,7 @@ data class ConfiguracaoDeEscuta(
     val perfil: PerfilEndpoint,
 ) {
 
-  /** `true` no único estado sem gramática fechada: o relato de exceção. */
+  /** `true` quando o estado não tem gramática fechada — nenhum tem, hoje (ver [palavras]). */
   val aberta: Boolean
     get() = palavras.isEmpty()
 

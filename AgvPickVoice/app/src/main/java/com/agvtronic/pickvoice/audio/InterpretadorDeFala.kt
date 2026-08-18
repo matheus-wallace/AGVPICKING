@@ -20,9 +20,6 @@ import com.agvtronic.pickvoice.domain.statemachine.PickingState
  */
 object InterpretadorDeFala {
 
-  /** Palavras mínimas para um relato de exceção ser aceito como relato, e não como ruído. */
-  private const val PALAVRAS_MINIMAS_DO_RELATO = 3
-
   /**
    * Teto de quantidade aceita por voz.
    *
@@ -54,16 +51,26 @@ object InterpretadorDeFala {
             normalizado == VocabularioDeVoz.CHEGUEI || normalizado == VocabularioDeVoz.PROXIMO
           }
 
-      // Dois dígitos exatos. Um só é fala cortada; três é ruído somado à fala — nos dois casos
-      // conferir seria adivinhar (doc §7.1).
+      // Por extenso primeiro ("quarenta e sete"), dígito a dígito depois ("quatro sete"): o
+      // extenso caiu na bancada de 17/08/2026 (add-voice-recognition-reliability - Decisão 1) e
+      // voltou na de 18/08/2026, porque só dígito a dígito também falhava — "a todo momento é
+      // entendido somente um deles". [VocabularioDeVoz.checkDigitExtenso] evita o motivo
+      // original da queda (a gramática ganhando palavras de centena) restringindo-se a 0..99.
+      // Ver [SeletorDeEscuta].
+      //
+      // O fallback exige dois algarismos exatos: um só é fala cortada, três é ruído somado à
+      // fala — nos dois casos conferir seria adivinhar (doc §7.1).
       is PickingState.AguardandoCheckDigit ->
-          VocabularioDeVoz.digitos(normalizado)
-              ?.takeIf { it.length == DIGITOS_DO_CHECK_DIGIT }
+          (VocabularioDeVoz.checkDigitExtenso(normalizado)
+                  ?: VocabularioDeVoz.digitos(normalizado)
+                      ?.takeIf { it.length == DIGITOS_DO_CHECK_DIGIT })
               ?.let(IntencaoDeVoz::CheckDigitFalado)
 
       // Por extenso primeiro ("doze"), dígito a dígito depois ("um dois"): o operador usa as duas
       // leituras, e só a segunda aceita magnitudes não decrescentes — invertê-las faria "um dois"
-      // ser rejeitado por `numero` antes de chegar à leitura que o entende.
+      // ser rejeitado por `numero` antes de chegar à leitura que o entende. Essa ordem caiu por
+      // um dia (Decisão 7, por consistência com o check digit acima) e voltou na bancada de
+      // 18/08/2026 pelo mesmo motivo do check digit: só dígito a dígito também falhava aqui.
       is PickingState.ConfirmandoQuantidade ->
           (VocabularioDeVoz.numero(normalizado)
                   ?: VocabularioDeVoz.numeroDigitoADigito(normalizado))
@@ -88,17 +95,15 @@ object InterpretadorDeFala {
       is PickingState.ItemConcluido ->
           IntencaoDeVoz.AvancarParaProximoItem.takeIf { normalizado == VocabularioDeVoz.PROXIMO }
 
-      // Vocabulário aberto, mas não passa qualquer coisa: um relato precisa ter forma de
-      // relato (design.md - Decisão 2). Uma palavra solta aqui é ruído do galpão.
-      //
-      // A exceção é "próximo": sem ela este estado é o único do fluxo sem saída curta, e o
-      // operador que não conseguisse fazer o ASR entender um relato inteiro ficava preso na
-      // ocorrência — relatado em bancada em 17/08/2026. Vale a mesma palavra de avanço do resto
-      // do fluxo, e o evento é o mesmo do relato: registra a ocorrência e segue.
+      // Só "próximo", como qualquer outro avanço de uma palavra do fluxo
+      // (add-voice-recognition-reliability - Decisão 2). O relato falado livre de três ou mais
+      // palavras deixou de ser aceito: `ExcecaoRegistrada` nunca carregou o texto reconhecido e
+      // nada no domínio o gravava ou consumia, então o vocabulário aberto que ele exigia só
+      // comprava instabilidade de transcrição. Detalhe da ocorrência entra pela ação de toque
+      // da tela do operador.
       is PickingState.TratandoExcecao ->
           evento(PickingEvent.ExcecaoRegistrada).takeIf {
-            normalizado == VocabularioDeVoz.PROXIMO ||
-                VocabularioDeVoz.palavras(normalizado).size >= PALAVRAS_MINIMAS_DO_RELATO
+            normalizado == VocabularioDeVoz.PROXIMO
           }
 
       // "próximo" é sinônimo aditivo de "concluir" aqui (design.md - Decisão 6 de

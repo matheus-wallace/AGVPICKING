@@ -55,10 +55,12 @@ class DicaDeComandoDeVozTest {
   }
 
   @Test
-  fun `a ocorrencia mostra o relato livre e a saida curta`() {
-    // Vocabulário aberto, mas com uma palavra fixa de saída — sem ela o operador fica preso.
+  fun `a ocorrencia mostra a saida curta`() {
+    // A gramática do estado fechou em "próximo" (add-voice-recognition-reliability - Decisão 2),
+    // então a dica é a mesma dos demais avanços de uma palavra: mostrar um relato livre que o
+    // ASR não aceita mais mandaria o operador para um caminho que não existe.
     assertEquals(
-        "Descreva a ocorrência ou diga: próximo",
+        "Diga: próximo",
         DicaDeComandoDeVoz.dica(PickingState.TratandoExcecao(MotivoExcecao.AVARIA, item)),
     )
   }

@@ -65,12 +65,17 @@ class ProjetorDeOperacao {
           )
 
       PickingState.AguardandoOrdem ->
-          base.mensagem(
-              texto = "Sessão pronta",
-              instrucao = "Escolha a ordem de separação",
-              nomeEtapa = "Escolha da ordem",
-              aguardandoVoz = true,
-          )
+          base
+              .mensagem(
+                  texto = "Sessão pronta",
+                  // Sem `aguardandoVoz`: `SeletorDeEscuta` não abre escuta neste estado, então
+                  // anunciar "aguardando comando de voz" no rodapé seria mentira.
+                  instrucao = "Confirme a ordem para começar",
+                  nomeEtapa = "Escolha da ordem",
+              )
+              // A escolha da ordem é por toque, não por voz (design.md — Decisão 4). Antes esta
+              // confirmação só existia no painel de desenvolvimento, e o operador travava aqui.
+              .copy(podeConfirmarOrdem = true)
 
       is PickingState.OrdemCarregada ->
           base.mensagem(
@@ -192,12 +197,15 @@ class ProjetorDeOperacao {
           base
               .mensagem(
                   texto = "Ocorrência de ${descricao(estado.motivo)}",
-                  instrucao = "Descreva a ocorrência por voz para registrar",
+                  instrucao = "Registre a ocorrência para seguir",
                   nomeEtapa = "Registro de ocorrência",
                   aguardandoVoz = true,
               )
-              // O único ponto do fluxo em que a tela oferece um toque: aqui a voz precisa de um
-              // relato inteiro, e é o estado em que o operador ficou preso em bancada.
+              // Um dos dois pontos do fluxo em que a tela oferece um toque (o outro é
+              // `AguardandoOrdem`, acima). Desde que a gramática deste estado fechou em "próximo"
+              // (add-voice-recognition-reliability - Decisão 2)
+              // a voz não precisa mais de um relato inteiro, mas o toque continua: é por ele que
+              // o detalhe da ocorrência entra, e é a saída que destravou o operador em bancada.
               .copy(podeRegistrarOcorrencia = true)
 
       is PickingState.ConferenciaFinal ->

@@ -42,9 +42,22 @@ object SeletorDeEscuta {
             comando(VocabularioDeVoz.CHEGUEI, VocabularioDeVoz.PROXIMO)
 
         // Dois dígitos: o perfil longo do doc §5.1, que tolera a micropausa entre eles.
+        //
+        // Extenso e dígito a dígito, os dois: a leitura por extenso ("quarenta e sete") chegou a
+        // cair na bancada de 17/08/2026 (add-voice-recognition-reliability - Decisão 1) por dois
+        // motivos — a fala grudada registrava incompleta, e a gramática de 0-999 inteira somava
+        // ~30 palavras de dezena/centena que confundiam o dígito a dígito com "quatrocentos". Na
+        // bancada de 18/08/2026, o inverso se provou: só dígito a dígito também falha, muitas
+        // vezes só um dos dois algarismos é entendido. `CHECK_DIGIT_POR_EXTENSO` reintroduz o
+        // extenso sem repetir o segundo motivo — é [VocabularioDeVoz.QUANTIDADES] sem as palavras
+        // de centena, que não fazem sentido para um check digit de dois algarismos de qualquer
+        // forma.
         is PickingState.AguardandoCheckDigit ->
             ConfiguracaoDeEscuta(
-                palavras = VocabularioDeVoz.DIGITOS + VocabularioDeVoz.TRANSVERSAIS,
+                palavras =
+                    VocabularioDeVoz.DIGITOS +
+                        VocabularioDeVoz.CHECK_DIGIT_POR_EXTENSO +
+                        VocabularioDeVoz.TRANSVERSAIS,
                 perfil = PerfilEndpoint.DIGITOS,
             )
 
@@ -56,6 +69,12 @@ object SeletorDeEscuta {
         is PickingState.VerificacaoAssistida,
         is PickingState.ValidandoContraDados -> null
 
+        // Extenso ("doze") e dígito a dígito ("um dois"), os dois — essa gramática nunca falhou
+        // em bancada; saiu por um dia (add-voice-recognition-reliability - Decisão 7, por
+        // consistência com o check digit) e voltou na bancada de 18/08/2026, quando o mesmo
+        // corte que atrapalhava o check digit apareceu aqui: só dígito a dígito, "a todo momento
+        // é entendido somente um deles". "meia" fica de fora — em quantidade ela é ambígua com
+        // "meia dúzia".
         is PickingState.ConfirmandoQuantidade ->
             ConfiguracaoDeEscuta(
                 palavras = VocabularioDeVoz.QUANTIDADES + VocabularioDeVoz.TRANSVERSAIS,
@@ -73,9 +92,14 @@ object SeletorDeEscuta {
             comando(VocabularioDeVoz.ALOCADO, VocabularioDeVoz.PROXIMO)
         is PickingState.ItemConcluido -> comando(VocabularioDeVoz.PROXIMO)
 
-        // O único estado de vocabulário aberto (design.md - Decisão 2).
-        is PickingState.TratandoExcecao ->
-            ConfiguracaoDeEscuta(palavras = emptyList(), perfil = PerfilEndpoint.TEXTO_LIVRE)
+        // Era o único estado de vocabulário aberto, e passou a ser gramática fechada como
+        // qualquer outro avanço de uma palavra (add-voice-recognition-reliability - Decisão 2).
+        // O log de bancada de 17/08/2026 mostra o decodificador aberto transcrevendo "próximo"
+        // como "prós", "aqui", "faria" e "o próximo" — enquanto todo estado de gramática
+        // fechada do mesmo log reconhece a palavra de avanço de primeira tentativa. O texto do
+        // relato livre nunca foi consumido pelo domínio, então fechar aqui não perde
+        // funcionalidade: quem registra detalhe é a ação de toque da tela do operador.
+        is PickingState.TratandoExcecao -> comando(VocabularioDeVoz.PROXIMO)
 
         // Idem: "próximo" soma a "concluir" e a "encerrar" (design.md - Decisão 8).
         is PickingState.ConferenciaFinal ->
