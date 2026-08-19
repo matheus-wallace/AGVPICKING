@@ -31,6 +31,18 @@ class ProjetorDeFalaPickingTest {
   }
 
   @Test
+  fun `ordem carregada e concluida falam so o pedido, nao a chave praca-pedido`() {
+    assertEquals(
+        "Ordem 408176 carregada. 3 itens",
+        projetor.projetar(PickingState.OrdemCarregada("274K5010000-408176", 3))?.texto,
+    )
+    assertEquals(
+        "Ordem 408176 concluída",
+        projetor.projetar(PickingState.OrdemConcluida("274K5010000-408176"))?.texto,
+    )
+  }
+
+  @Test
   fun `entrada em readback fala a quantidade para confirmacao`() {
     assertEquals(
         "Confirma 12?",

@@ -337,8 +337,8 @@ class PublicadorDeVozTest {
 
     val LINHAS =
         listOf(
-            LinhaDeBancada("quatro sete", "7896523202204", 12, "doze", "Rua D, prédio 118, andar B"),
-            LinhaDeBancada("quatro sete", "7891456120779", 4, "quatro", "Rua D, prédio 118, andar B"),
+            LinhaDeBancada("quatro zero", "7896523202204", 12, "doze", "Rua D, prédio 118, andar B"),
+            LinhaDeBancada("quatro zero", "7891456120779", 4, "quatro", "Rua D, prédio 118, andar B"),
             LinhaDeBancada("oito dois", "7890243719035", 30, "trinta", "Rua G, prédio 233, andar C"),
         )
 

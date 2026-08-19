@@ -14,7 +14,7 @@ class ProjetorDeFalaPicking {
             mensagem(
                 chave = "ordem-carregada:${estado.ordemId}:${estado.totalLinhas}",
                 texto =
-                    "Ordem ${estado.ordemId} carregada. ${estado.totalLinhas} " +
+                    "Ordem ${numeroOrdemFalado(estado.ordemId)} carregada. ${estado.totalLinhas} " +
                         if (estado.totalLinhas == 1) "item" else "itens",
             )
         is PickingState.NavegandoParaEndereco ->
@@ -53,7 +53,7 @@ class ProjetorDeFalaPicking {
         is PickingState.OrdemConcluida ->
             mensagem(
                 chave = "ordem-concluida:${estado.ordemId}",
-                texto = "Ordem ${estado.ordemId} concluída",
+                texto = "Ordem ${numeroOrdemFalado(estado.ordemId)} concluída",
             )
         is PickingState.Erro ->
             mensagem(
@@ -83,4 +83,11 @@ class ProjetorDeFalaPicking {
       texto: String,
       prioridade: PrioridadeFala = PrioridadeFala.ROTINA,
   ) = MensagemFalavel(chave, texto, prioridade)
+
+  /**
+   * `ordemId` é a chave achatada `praca-pedido` (`Ordem.id`), opaca para o resto do domínio —
+   * mas falar `274K5010000-408176` é um número longo demais para o operador acompanhar de
+   * ouvido. O `pedido` sozinho (depois do último `-`) é o número que a operação reconhece.
+   */
+  private fun numeroOrdemFalado(ordemId: String): String = ordemId.substringAfterLast("-")
 }

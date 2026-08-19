@@ -19,7 +19,7 @@ class ResolvedorDeIntencaoTest {
   private val repositorio = MockPickingRepository()
   private val resolvedor = ResolvedorDeIntencao(repositorio)
 
-  // A primeira ordem do mock: 3 linhas, senhas de endereço 47, 47 e 82.
+  // A primeira ordem do mock: 3 linhas, senhas de endereço 40, 40 e 82.
   private val ordemId = "274K5010000-408176"
 
   private fun item(indice: Int) =
@@ -40,7 +40,7 @@ class ResolvedorDeIntencaoTest {
 
     assertEquals(
         PickingEvent.CheckDigitCorreto,
-        resolvedor.resolver(estado, IntencaoDeVoz.CheckDigitFalado("47")),
+        resolvedor.resolver(estado, IntencaoDeVoz.CheckDigitFalado("40")),
     )
   }
 
@@ -57,12 +57,12 @@ class ResolvedorDeIntencaoTest {
 
   @Test
   fun `check digit de posicao usa a senha da linha em curso, nao a da primeira`() = runTest {
-    // A terceira linha tem senha 82; "47" acerta as duas primeiras e precisa falhar aqui.
+    // A terceira linha tem senha 82; "40" acerta as duas primeiras e precisa falhar aqui.
     val estado = PickingState.AguardandoCheckDigit(item(2), TipoCheckDigit.POSICAO)
 
     assertEquals(
         PickingEvent.CheckDigitIncorreto,
-        resolvedor.resolver(estado, IntencaoDeVoz.CheckDigitFalado("47")),
+        resolvedor.resolver(estado, IntencaoDeVoz.CheckDigitFalado("40")),
     )
     assertEquals(
         PickingEvent.CheckDigitCorreto,
