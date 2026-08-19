@@ -22,6 +22,14 @@ seção "Verificação da API do sherpa-onnx", itens (a) e (b).
 
 ## Whisper tiny multilíngue, quantizado int8
 
+> **Os arquivos abaixo não estão mais neste diretório.** O change
+> `add-sherpa-onnx-omnilingual-decoder` removeu `whisper-tiny/` depois que a bancada de
+> 18/08/2026 mediu o decodificador alucinando em comandos curtos de pt-BR; o motor passou a
+> usar `../modelo-sherpa-onnx-omnilingual/`. O registro fica aqui de propósito, para que a
+> volta seja um `git checkout` do diretório sem perder a proveniência dele
+> (design.md daquele change - Decisão 4). O Silero VAD acima **não** foi afetado: ele é
+> independente do decodificador e continua em uso.
+
 | | |
 |---|---|
 | Pacote | `sherpa-onnx-whisper-tiny.tar.bz2` (116.204.861 B compactado) |

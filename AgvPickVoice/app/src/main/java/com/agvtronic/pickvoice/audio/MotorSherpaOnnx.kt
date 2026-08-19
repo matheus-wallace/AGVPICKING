@@ -5,24 +5,34 @@ import android.content.res.AssetManager
 import android.util.Log
 import com.k2fsa.sherpa.onnx.FeatureConfig
 import com.k2fsa.sherpa.onnx.OfflineModelConfig
+import com.k2fsa.sherpa.onnx.OfflineOmnilingualAsrCtcModelConfig
 import com.k2fsa.sherpa.onnx.OfflineRecognizer
 import com.k2fsa.sherpa.onnx.OfflineRecognizerConfig
-import com.k2fsa.sherpa.onnx.OfflineWhisperModelConfig
 import com.k2fsa.sherpa.onnx.SileroVadModelConfig
 import com.k2fsa.sherpa.onnx.Vad
 import com.k2fsa.sherpa.onnx.VadModelConfig
 
 /**
- * O [MotorDeAsr] do sherpa-onnx: Silero VAD corta o trecho de fala, Whisper multilíngue o
+ * O [MotorDeAsr] do sherpa-onnx: Silero VAD corta o trecho de fala, Omnilingual ASR CTC o
  * decodifica.
+ *
+ * ### Por que CTC, e não mais o Whisper
+ *
+ * O decodificador anterior era Whisper-tiny multilíngue, e a bancada de 18/08/2026 o mediu
+ * **alucinando** em comandos curtos de pt-BR com sinal limpo — "iniciar" saindo como "e iniciar
+ * prouximo". Não era calibração: Whisper é autoregressivo, e um decodificador que gera token a
+ * token pode continuar a frase além do que o áudio disse. Omnilingual ASR é CTC, quer dizer,
+ * frame-síncrono — cada quadro de áudio produz no máximo um símbolo, e não existe estado de
+ * geração livre de onde inventar palavra que não foi falada. A troca é do mecanismo, não do
+ * ajuste (add-sherpa-onnx-omnilingual-decoder - design.md).
  *
  * ### VAD-então-ASR, não streaming
  *
  * É a diferença estrutural para o [MotorVosk], e ela não foi uma escolha: o model zoo do
- * sherpa-onnx **não tem modelo de streaming para português**. A única via de pt-BR nesse toolkit
- * é Whisper, que é offline — decodifica um trecho já delimitado, de uma vez. Por isso não existe
- * hipótese parcial aqui: até o VAD fechar o trecho, nada foi decodificado, e o resultado só
- * aparece depois da inferência sobre o trecho inteiro. A spec desta mudança registra isso como
+ * sherpa-onnx **não tem modelo de streaming para português**. As vias de pt-BR nesse toolkit são
+ * todas offline — decodificam um trecho já delimitado, de uma vez. Por isso não existe hipótese
+ * parcial aqui: até o VAD fechar o trecho, nada foi decodificado, e o resultado só aparece
+ * depois da inferência sobre o trecho inteiro. A spec desta mudança registra isso como
  * comportamento esperado ("Publicação não é instantânea ao fim da fala"), não como defeito.
  *
  * ### Três coisas que a verificação da API impôs a este código
@@ -78,7 +88,7 @@ class MotorSherpaOnnx(
   private val vadPorSilencio = mutableMapOf<Int, Vad>()
 
   /**
-   * Carrega o reconhecedor Whisper. O VAD de cada perfil vem depois, em [abrirSessao].
+   * Carrega o reconhecedor Omnilingual ASR. O VAD de cada perfil vem depois, em [abrirSessao].
    *
    * Confere antes que os modelos existem em `assets/`: sem essa conferência, um arquivo faltando
    * derrubaria o processo dentro do C++ em vez de desligar a voz e seguir.
@@ -99,30 +109,28 @@ class MotorSherpaOnnx(
                   assetManager = assets,
                   config =
                       OfflineRecognizerConfig(
-                          featConfig =
-                              FeatureConfig(sampleRate = TAXA_EXIGIDA, featureDim = DIMENSAO_FEATURE),
+                          // Só a taxa importa: o grafo do modelo tem `feature_extractor` próprio
+                          // (wav2vec2) e consome forma de onda crua, então não há banco de
+                          // filtros montado aqui como o Whisper exigia.
+                          featConfig = FeatureConfig(sampleRate = TAXA_EXIGIDA),
                           modelConfig =
                               OfflineModelConfig(
-                                  whisper =
-                                      OfflineWhisperModelConfig(
-                                          encoder = ENCODER,
-                                          decoder = DECODER,
-                                          // Multilíngue por característica do modelo; o app
-                                          // continua assumindo pt-BR e não detecta idioma.
-                                          language = IDIOMA,
-                                          task = TAREFA,
-                                      ),
+                                  omnilingual =
+                                      OfflineOmnilingualAsrCtcModelConfig(model = MODELO),
                                   tokens = TOKENS,
-                                  modelType = TIPO_WHISPER,
+                                  // `modelType` fica vazio: o despacho do sherpa-onnx é por qual
+                                  // sub-config está preenchida, e o `omnilingual-asr` gravado nos
+                                  // metadados do .onnx não é valor aceito nesse campo — preenchê-lo
+                                  // cairia no caminho de "Invalid model_type" do C++.
                                   numThreads = ajustes.threadsDeInferencia,
                               ),
                       ),
               )
             }
             .onSuccess {
-              Log.i(TAG, "Whisper carregado em ${System.currentTimeMillis() - inicio}ms")
+              Log.i(TAG, "Omnilingual ASR carregado em ${System.currentTimeMillis() - inicio}ms")
             }
-            .onFailure { Log.e(TAG, "Falha ao carregar o Whisper; voz desligada", it) }
+            .onFailure { Log.e(TAG, "Falha ao carregar o Omnilingual ASR; voz desligada", it) }
             .getOrNull()
 
     return reconhecedor != null
@@ -233,8 +241,9 @@ class MotorSherpaOnnx(
               .onFailure { Log.e(TAG, "Falha ao decodificar o trecho; descartado", it) }
               .getOrDefault("")
 
-      // O Whisper devolve texto pontuado e capitalizado; a limpeza mora na fronteira do motor,
-      // nunca no InterpretadorDeFala (add-sherpa-onnx-asr-engine - Decisão 3).
+      // A limpeza mora na fronteira do motor, nunca no InterpretadorDeFala
+      // (add-sherpa-onnx-asr-engine - Decisão 3). Vale para qualquer decodificador: o que muda de
+      // um para outro é quanta pontuação e capitalização vêm junto, não de quem é a limpeza.
       return ResultadoDeAsr.Fechada(NormalizadorDeTextoAsr.normalizar(texto))
     }
 
@@ -255,15 +264,19 @@ class MotorSherpaOnnx(
   private companion object {
     const val TAG = "MotorSherpaOnnx"
 
-    /** Diretório dos modelos dentro de `assets/`. Ver PROVENIENCIA.md lá dentro. */
-    const val DIRETORIO = "modelo-sherpa-onnx"
+    /**
+     * Dois diretórios em `assets/`, um por modelo: o VAD não mudou quando o decodificador mudou, e
+     * separá-los mantém a proveniência de cada um rastreável. Ver PROVENIENCIA.md em cada um.
+     */
+    const val DIRETORIO_VAD = "modelo-sherpa-onnx"
 
-    const val SILERO_VAD = "$DIRETORIO/silero_vad.onnx"
-    const val ENCODER = "$DIRETORIO/whisper-tiny/tiny-encoder.int8.onnx"
-    const val DECODER = "$DIRETORIO/whisper-tiny/tiny-decoder.int8.onnx"
-    const val TOKENS = "$DIRETORIO/whisper-tiny/tiny-tokens.txt"
+    const val DIRETORIO_ASR = "modelo-sherpa-onnx-omnilingual"
 
-    val ARQUIVOS_EXIGIDOS = listOf(SILERO_VAD, ENCODER, DECODER, TOKENS)
+    const val SILERO_VAD = "$DIRETORIO_VAD/silero_vad.onnx"
+    const val MODELO = "$DIRETORIO_ASR/model.int8.onnx"
+    const val TOKENS = "$DIRETORIO_ASR/tokens.txt"
+
+    val ARQUIVOS_EXIGIDOS = listOf(SILERO_VAD, MODELO, TOKENS)
 
     /**
      * 16 kHz, e não é negociável: o Silero VAD do sherpa-onnx mata o processo em qualquer outra
@@ -273,16 +286,6 @@ class MotorSherpaOnnx(
 
     /** 512 amostras a 16 kHz — o único valor que o `silero_vad.onnx` aceita. */
     const val JANELA_SILERO = 512
-
-    /** O banco de filtros do Whisper tem 80 canais; é o default do sherpa-onnx e do modelo. */
-    const val DIMENSAO_FEATURE = 80
-
-    const val IDIOMA = "pt"
-
-    /** `transcribe`, nunca `translate`: traduzir para inglês destruiria todo o vocabulário. */
-    const val TAREFA = "transcribe"
-
-    const val TIPO_WHISPER = "whisper"
 
     /** Os [AjustesAsr] falam em ms; o sherpa-onnx, em segundos. */
     const val MS_POR_SEGUNDO = 1_000f
