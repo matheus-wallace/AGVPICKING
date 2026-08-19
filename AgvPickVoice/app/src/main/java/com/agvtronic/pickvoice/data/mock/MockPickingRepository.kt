@@ -144,7 +144,7 @@ class MockPickingRepository : PickingRepository {
                             descricao = "LORATADINA 10MG COM 12 COMPRIMIDOS",
                             endereco =
                                 Endereco(cd = "72", setor = "04", andar = "B", predio = "118", rua = "D"),
-                            senhaEndereco = "47",
+                            senhaEndereco = "40",
                             // ÚNICO valor real de todo o dataset, e de propósito: é o EAN impresso
                             // na caixa física usada na bancada de visão (Loratamed, Cimed). A
                             // primeira linha da primeira ordem é a que uma execução de bancada
@@ -166,7 +166,7 @@ class MockPickingRepository : PickingRepository {
                             descricao = "DIPIRONA SODICA 1G COM 10 COMPRIMIDOS",
                             endereco =
                                 Endereco(cd = "72", setor = "04", andar = "B", predio = "118", rua = "D"),
-                            senhaEndereco = "47",
+                            senhaEndereco = "40",
                             ean = "7891456120779",
                             dun14 = "27891456120773",
                             partida = "60318431",

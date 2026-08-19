@@ -55,8 +55,8 @@ class DevPanelViewModelTest {
 
     val estado = viewModel.uiState.first { it.ordem != null }
 
-    // "47" é a senha cadastrada para a primeira linha da ordem mockada (MockPickingRepository).
-    assertEquals("47", estado.checkDigitEsperado)
+    // "40" é a senha cadastrada para a primeira linha da ordem mockada (MockPickingRepository).
+    assertEquals("40", estado.checkDigitEsperado)
   }
 
   @Test

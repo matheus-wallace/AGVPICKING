@@ -7,6 +7,12 @@ mwdat = "0.9.0"
 lifecycle = "2.10.0"
 coroutines = "1.10.2"
 vosk = "0.3.75"
+# sherpa-onnx NÃO tem artefato no Maven Central — verificado na API do Central, que não
+# devolve nenhum pacote do k2-fsa. O AAR oficial é publicado como release asset no GitHub e
+# está vendorizado em `app/libs/`. A versão fica aqui mesmo assim: é ela que o build.gradle.kts
+# usa para montar o nome do arquivo, então trocar de versão continua sendo mudar um lugar só.
+# Ver design.md de add-sherpa-onnx-asr-engine, "Verificação da API do sherpa-onnx", item 1.1.
+sherpaOnnx = "1.13.5"
 mlkitBarcode = "17.3.0"
 junit = "4.13.2"
 exifInterface = "1.4.2"

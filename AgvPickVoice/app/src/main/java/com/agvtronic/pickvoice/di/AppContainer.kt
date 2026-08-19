@@ -8,6 +8,11 @@ import com.agvtronic.pickvoice.audio.AjustesAsr
 import com.agvtronic.pickvoice.audio.AudioHfpOculos
 import com.agvtronic.pickvoice.audio.AudioMicrofoneSimulado
 import com.agvtronic.pickvoice.audio.FonteAudio
+import com.agvtronic.pickvoice.audio.MotorDeAsr
+// Importado só pelos links de KDoc acima de `motorDeAsr`: bancada de 18/08/2026 no TC21
+// derrubou a hipótese a favor dele (ver KDoc), volta a ser candidato numa próxima rodada.
+import com.agvtronic.pickvoice.audio.MotorSherpaOnnx
+import com.agvtronic.pickvoice.audio.MotorVosk
 import com.agvtronic.pickvoice.audio.PublicadorDeVoz
 import com.agvtronic.pickvoice.audio.ReconhecedorDeComando
 import com.agvtronic.pickvoice.audio.ResolvedorDeIntencao
@@ -111,6 +116,33 @@ class AppContainer(private val appContext: Context) {
    */
   val fonteAudio: FonteAudio = AudioMicrofoneSimulado(ajustesAsr)
 
+  /**
+   * Qual decodificador de fala roda, interface-tipado pelo mesmo motivo do [fonteAudio]: trocar
+   * Vosk por sherpa-onnx é **esta linha e mais nenhuma** (add-sherpa-onnx-asr-engine - Decisão 1).
+   *
+   * **As duas implementações existem.** A ativa é [MotorVosk] — a bancada de 18/08/2026 testou
+   * [MotorSherpaOnnx] no TC21 com `degradarCanal=false` (áudio cru a 16 kHz, sinal forte, pico
+   * ~-14 dBFS) e o Whisper-tiny, que era o decodificador dele na época, alucinou nos comandos
+   * curtos da gramática (`"iniciar"`/`"próximo"` saíram embutidos em texto extra, nunca
+   * isolados). Não foi problema de ganho nem de canal degradado — as duas hipóteses foram
+   * descartadas nessa mesma bancada.
+   *
+   * O [MotorSherpaOnnx] **já trocou aquele decodificador** por Omnilingual ASR CTC
+   * (`add-sherpa-onnx-omnilingual-decoder`), justamente porque CTC é frame-síncrono e não tem o
+   * mecanismo de geração livre que produzia a alucinação — e a bancada de 18/08/2026 (mesmo dia,
+   * SM-G780F) **também falhou**, por um motivo diferente: sem campo de idioma na API (confirmado
+   * no binding Kotlin e no `.h` do C++ oficial, não é limitação só do binding), o modelo decodifica
+   * elocuções curtas de pt-BR em scripts de outros idiomas (chinês, grego, devanágari) em vez de
+   * alucinar texto plausível. Nenhuma tentativa passou da gramática. `hotwordsFile`/`hotwordsScore`
+   * foi descartado sem implementar — só funciona em modelo transducer, não em CTC.
+   *
+   * **Via sherpa-onnx encerrada para este projeto** até que o model zoo publique um transducer
+   * pt-BR (único tipo que suporta restrição por gramática) ou o Omnilingual ASR ganhe seletor de
+   * idioma via API (`k2-fsa/sherpa-onnx#2812`, ainda em aberto). Ver `tasks.md` de
+   * `add-sherpa-onnx-omnilingual-decoder`, seção 6, para o log real da bancada.
+   */
+  val motorDeAsr: MotorDeAsr = MotorVosk(appContext, ajustesAsr)
+
   /** Saída substituível: TTS local nesta fatia, Piper/HFP quando essa rota existir. */
   val saidaDeAudio: SaidaDeAudio = SaidaTextToSpeechAndroid(appContext)
 
@@ -145,6 +177,7 @@ class AppContainer(private val appContext: Context) {
       ReconhecedorDeComando(
           appContext = appContext,
           fonteAudio = fonteAudio,
+          motor = motorDeAsr,
           actor = pickingActor,
           publicador = publicadorDeVoz,
           falaEmCurso = saidaDeAudio.falando,
