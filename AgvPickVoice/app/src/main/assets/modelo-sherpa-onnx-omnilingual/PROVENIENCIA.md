@@ -1,5 +1,13 @@
 # Omnilingual ASR CTC — proveniência
 
+> **20/08/2026 — o `model.int8.onnx` saiu do repositório.** Os 349 MiB estouravam o limite de
+> 100 MB por arquivo do GitHub e travavam o `push`, e o motor deixou de ser usado. O histórico
+> foi reescrito para purgar o blob; ficaram aqui só o `tokens.txt` e esta proveniência. Para
+> voltar a rodar o `MotorSherpaOnnx`, baixe o pacote da URL abaixo e extraia o `model.int8.onnx`
+> neste diretório — **sem versioná-lo de novo** (ver `.gitignore` de `app/`). Sem esse arquivo o
+> projeto compila normalmente, mas o motor sherpa falha ao carregar em tempo de execução; o
+> padrão continua sendo o Vosk.
+
 Decodificador do `MotorSherpaOnnx` a partir do change `add-sherpa-onnx-omnilingual-decoder`.
 Substitui o Whisper-tiny, que a bancada de 18/08/2026 mediu alucinando em comandos curtos de
 pt-BR. Fica versionado no git pela mesma decisão que já vale para o Vosk e para o Silero VAD:

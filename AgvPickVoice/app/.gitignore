@@ -1,1 +1,5 @@
 /build
+
+# Modelo do MotorSherpaOnnx: 349 MiB, acima do limite de 100 MB por arquivo do GitHub.
+# Baixe pela URL em assets/modelo-sherpa-onnx-omnilingual/PROVENIENCIA.md quando for usar o motor.
+/src/main/assets/modelo-sherpa-onnx-omnilingual/model.int8.onnx
