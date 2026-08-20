@@ -13,6 +13,11 @@ vosk = "0.3.75"
 # usa para montar o nome do arquivo, então trocar de versão continua sendo mudar um lugar só.
 # Ver design.md de add-sherpa-onnx-asr-engine, "Verificação da API do sherpa-onnx", item 1.1.
 sherpaOnnx = "1.13.5"
+# Picovoice Rhino — última versão publicada no Maven Central em 19/08/2026, confirmada no
+# `maven-metadata.xml` do artefato (`<release>4.0.2</release>`), não na documentação do produto.
+# O `.aar` foi baixado e inspecionado antes de qualquer código: ver design.md de
+# `add-picovoice-asr-engine`, seção "Verificação da API do Rhino".
+picovoiceRhino = "4.0.2"
 mlkitBarcode = "17.3.0"
 junit = "4.13.2"
 exifInterface = "1.4.2"
@@ -32,6 +37,12 @@ kotlinx-coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-cor
 # ASR local do doc §5. O grupo é `com.alphacephei`, não `org.vosk` — verificado no Maven
 # Central, junto com a dependência transitiva `net.java.dev.jna:jna` que o .aar puxa.
 vosk-android = { group = "com.alphacephei", name = "vosk-android", version.ref = "vosk" }
+# Picovoice Rhino — fala-para-intenção do `MotorPicovoiceRhino`. Ao contrário do sherpa-onnx,
+# **tem** artefato no Maven Central (`ai.picovoice:rhino-android`, Apache-2.0), então entra por
+# coordenada e não por arquivo vendorizado. O `.aar` já traz o runtime nativo das quatro ABIs e o
+# modelo de idioma **inglês** em `res/raw/rhino_params.pv`; o modelo pt-BR não vem junto e está
+# vendorizado em `app/src/main/assets/modelo-picovoice-rhino/` (ver PROVENIENCIA.md de lá).
+picovoice-rhino-android = { group = "ai.picovoice", name = "rhino-android", version.ref = "picovoiceRhino" }
 # Leitura de código de barras do doc §6.3, passo 1 da cascata. `barcode-scanning` é a
 # distribuição **bundled** (o modelo vai dentro do APK); a variante `barcode-scanning-common`
 # via Play Services baixaria o modelo no primeiro uso e quebraria o requisito offline.

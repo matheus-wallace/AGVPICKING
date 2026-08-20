@@ -1,0 +1,329 @@
+# Fonte YAML para o Picovoice Console — NÃO é consumido pelo app.
+#
+# O app lê só o .rhn compilado (picovoice-pt.rhn, ver PROVENIENCIA.md deste diretório). Este
+# arquivo é o texto de origem: cola no editor de contexto do Console (ou importa, se o Console
+# aceitar upload direto de YAML) e compila de lá. Fica versionado aqui como fonte de
+# reprodutibilidade — se o contexto precisar mudar, edita aqui, recompila, substitui o .rhn.
+#
+# Cobre as duas famílias de intenção que add-picovoice-asr-engine precisa (design.md +
+# SintetizadorDeIntencaoRhino.kt):
+#   1. Palavra única (15 intenções, nome = palavra do VocabularioDeVoz sem acento)
+#   2. Número falado — dígito a dígito e por extenso, 1 a 999
+#
+# ## Uso compartilhado com o app-wms (19/08/2026, planejamento futuro)
+#
+# Este contexto foi desenhado só pro AGV Pick Voice, mas passou a ser pensado como ponto de
+# partida pra uma avaliação futura de Rhino no `app-wms` (repositório separado,
+# /Users/matheus/dev-workspace/projects/app-wms — app de produção real do trabalho do Matheus,
+# não deste hackathon). Diferenças confirmadas lendo o código de lá antes de estender este
+# arquivo (não assumidas):
+#
+# - `app-wms` é React Native (Android + iOS) e hoje usa `@react-native-voice/voice` — o
+#   reconhecedor de vocabulário aberto do sistema operacional, não um motor de gramática
+#   fechada. Trocar por Rhino lá é decisão de arquitetura própria daquele projeto, ainda não
+#   feita — este arquivo só deixa o vocabulário pronto, não implica a troca.
+#   Por que o app-wms reconhece frase inteira (com enchimento) em vez de comando isolado: é
+#   contorno de uma limitação do reconhecedor do Google pra números pequenos falados sozinhos,
+#   não requisito de produto (confirmado com o Matheus, 19/08/2026). A tela CountBack já
+#   pergunta unidades e caixas em momentos separados (ask_unit_count -> ask_box_count) — se o
+#   Rhino reconhecer número isolado bem, "23" no momento certo já resolve "23 caixas" sem o
+#   motor precisar saber se é caixa ou unidade, com a mesma modelagem de utterance única e
+#   fechada que numero_digitos/numero_extenso já usa. Não é uma decisão tomada, só uma leitura
+#   mais otimista do problema do que a versão anterior deste comentário registrava.
+# - `numberConversor.js` (equivalente lá a VocabularioDeVoz.numero()/digitos() daqui) aceita
+#   "uma"/"duas" como sinônimo de "um"/"dois" — concordância de gênero com "unidade"/"caixa",
+#   que o vocabulário do AGV nunca precisou. Adicionadas nos slots unidade/digito abaixo.
+# - Comandos que existem lá e não existem no AGV: `reiniciar`, `cancelar`, `sim`, `não` (telas
+#   `CountBack`), e `repetir` tem "repete" como variante exata (`SeparacaoDirecionaPallet`,
+#   `CountBack` — bate com o "repetir"/"repete" que já é ambíguo checado abaixo). Entram como
+#   intenções novas, inertes no AGV hoje (nenhum PickingEvent as consome — mesma categoria de
+#   "aceito pelo motor, sem efeito no app" que já vale pra "meia" em quantidade).
+# - **Gap aberto, não fechado aqui de propósito**: se "uma"/"duas" viraram reconhecíveis pelo
+#   motor mas VocabularioDeVoz.VALOR_NUMERO/VALOR_DIGITO_EM_QUANTIDADE (Kotlin, AGV) não as têm,
+#   o app recebe o texto e InterpretadorDeFala descarta (retorna null) — reconhecido pelo motor,
+#   sem efeito no app. Fazer "uma"/"duas" funcionarem de verdade no AGV é mudança de código
+#   Kotlin à parte, não decidida/aplicada nesta rodada.
+#
+# Contrato do lado do app para a família 2 (SintetizadorDeIntencaoRhino.textoDosSlots): os
+# valores dos slots de uma intenção são ordenados pelo NOME do slot e concatenados com espaço.
+# As instâncias abaixo têm nomes em ordem alfabética = ordem de magnitude decrescente (n1 > n2 >
+# n3, d1 > d2 > d3) de propósito — sem isso, VocabularioDeVoz.numero()/checkDigitExtenso()/
+# digitos()/numeroDigitoADigito() do lado do app receberiam as palavras fora de ordem e
+# devolveriam null.
+#
+# ## Por que check digit e quantidade viraram UM SÓ par de intenções
+#
+# Primeira versão deste arquivo tinha 4 intenções (check_digit_digitos/extenso,
+# quantidade_digitos/extenso). O Console rejeitou por ambiguidade: "dois dois" bate tanto em
+# check digit quanto em quantidade, "dezessete"/"cinquenta"/"cinquenta e dois" idem — porque são
+# **a mesma fala**. O Rhino decide intenção só pelo áudio, sem saber em que PickingState o app
+# está, então não tem como (nem deveria) resolver algo que só o estado resolve. Isso já é
+# exatamente o que InterpretadorDeFala.kt já faz: o mesmo texto reconhecido significa check
+# digit em AguardandoCheckDigit e quantidade em ConfirmandoQuantidade — a decisão sempre foi por
+# estado, nunca por conteúdo da fala. Duas intenções aqui só duplicariam essa decisão num lugar
+# que não pode vê-la. Solução: um único par ("numero_digitos"/"numero_extenso") cobrindo os dois
+# usos; o app decide o significado, como sempre decidiu.
+#
+# Um segundo caso do mesmo problema apareceu dentro da própria quantidade: um dígito sozinho
+# ("dois") batia tanto na leitura dígito a dígito quanto na extenso — as duas dão o mesmo valor
+# final (numero("dois") e numeroDigitoADigito("dois") retornam 2 igual), então "numero_digitos"
+# abaixo só cobre 2-3 dígitos; um dígito sozinho é papel exclusivo de "numero_extenso"
+# ($unidade:n1).
+#
+# Não verificado direto no Console (só nos demos oficiais do Picovoice) — conferir a sintaxe de
+# "$tipo:instancia" e slots reusados contra o guia de contexto de lá antes de importar.
+
+context:
+  expressions:
+
+    # =====================================================================================
+    # 1. Palavra única — nome da intenção sem acento (identificador), texto da expressão com
+    #    acento (é o que o modelo de idioma pt reconhece).
+    # =====================================================================================
+
+    # Fluxo
+    iniciar:
+      - "iniciar"
+    cheguei:
+      - "cheguei"
+    confirmar:
+      - "confirmar"
+    corrigir:
+      - "corrigir"
+    alocado:
+      - "alocado"
+    proximo:
+      - "próximo"
+    concluir:
+      - "concluir"
+    encerrar:
+      - "encerrar"
+    retomar:
+      - "retomar"
+
+    # Transversais (doc §3.3, aceitos em todo estado operacional)
+    parar:
+      - "parar"
+    emergencia:
+      - "emergência"
+    # "repete" é a variante que o app-wms já usa (SeparacaoDirecionaPallet, CountBack) — mesma
+    # intenção, mesmo texto sintetizado, porque INTENCOES mapeia pelo NOME da intenção
+    # ("repetir"), não pela expressão que disparou o reconhecimento.
+    repetir:
+      - "repetir"
+      - "repete"
+    avaria:
+      - "avaria"
+    ruptura:
+      - "ruptura"
+    divergencia:
+      - "divergência"
+
+    # -------------------------------------------------------------------------------------
+    # Só app-wms hoje (CountBack) — sem PickingEvent correspondente no AGV, mesma categoria
+    # inerte de "meia" em quantidade. Nomes já sem acento por consistência com a regra acima.
+    # -------------------------------------------------------------------------------------
+    reiniciar:
+      - "reiniciar"
+    cancelar:
+      - "cancelar"
+    sim:
+      - "sim"
+    nao:
+      - "não"
+
+    # =====================================================================================
+    # 2. Número falado — cobre check digit (2 dígitos exatos / 10-99 por extenso) e quantidade
+    #    (1-999, dígito a dígito e por extenso) na MESMA intenção — ver "Por que check digit e
+    #    quantidade viraram um só par" no topo do arquivo. Nome da intenção é livre: só o valor
+    #    do slot importa (PROVENIENCIA.md), o app decide o significado pelo PickingState.
+    # =====================================================================================
+
+    # 2-3 dígitos ("quatro sete" -> "47", "um dois três" -> "123"). 1 dígito sozinho fica de
+    # fora de propósito: "numero_extenso" já cobre isso via $unidade:n1, mesmo valor final.
+    # Lista COM "meia" (VocabularioDeVoz.VALOR_DIGITO) — check digit usa; quantidade rejeita
+    # "meia" no lado do app (VALOR_DIGITO_EM_QUANTIDADE não tem "meia"), então falar "meia" em
+    # ConfirmandoQuantidade simplesmente não produz evento, sem precisar de dois slots aqui.
+    numero_digitos:
+      - "$digito:d1 $digito:d2"
+      - "$digito:d1 $digito:d2 $digito:d3"
+
+    # Por extenso, decomposto por magnitude em vez de enumerado (espelha VocabularioDeVoz.
+    # VALOR_NUMERO). numero()/checkDigitExtenso() só exigem magnitudes estritamente decrescentes
+    # e ignoram o conectivo "e" — não precisa ser gramaticalmente perfeito, só estar em ordem
+    # decrescente. As linhas de centena (100-999) nunca formam um check digit válido — numero()
+    # dá >99, checkDigitExtenso() descarta —, então falar "cento e vinte" em AguardandoCheckDigit
+    # não produz evento, sem precisar de duas intenções.
+    numero_extenso:
+      - "$unidade:n1"                                   # 1-9
+      - "$dezenaCompleta:n1"                             # 10-19
+      - "$dezena:n1"                                     # 20, 30, ..., 90
+      - "$dezena:n1 e $unidade:n2"                       # 21-29, ..., 91-99
+      - "$centena:n1"                                    # 100, 200, ..., 900
+      - "$centena:n1 e $unidade:n2"                      # 101-109, 201-209, ...
+      - "$centena:n1 e $dezenaCompleta:n2"                # 110-119, 210-219, ...
+      - "$centena:n1 e $dezena:n2"                        # 120, 130, ..., 220, ...
+      - "$centena:n1 e $dezena:n2 e $unidade:n3"          # 121-129, ..., 991-999
+
+      # --- Casa dos milhares (1.000-999.999), pedido do Matheus 19/08/2026: 1200, 5300,
+      # 100005. Reusa unidade/dezenaCompleta/dezena/centena como multiplicador antes de "mil"
+      # (slots m1) e como resto depois (slots r1/r2/r3) — mesmas 9 formas de sempre, só com
+      # prefixo/sufixo novo. $mil:m2 é o "mil" da fala virando slot só pra sobreviver em
+      # textoDosSlots (ver nota "Marcador léxico de mil" nos slots, abaixo) — sem isso a palavra
+      # "mil" seria descartada como "e" já é, e "cem mil e cinco" viraria "cem cinco" no texto
+      # sintetizado, perdendo a multiplicação.
+      #
+      # SÓ multiplicador de token único ("cinco mil", "cem mil") — NÃO cobre multiplicador
+      # composto ("vinte e cinco mil", "cento e vinte mil"). Gap conhecido, não fechado aqui.
+      #
+      # "mil" sozinho (1000), com resto (1001-1999)
+      - "$mil:m2"
+      - "$mil:m2 e $unidade:r1"
+      - "$mil:m2 e $dezenaCompleta:r1"
+      - "$mil:m2 e $dezena:r1"
+      - "$mil:m2 e $dezena:r1 e $unidade:r2"
+      - "$mil:m2 e $centena:r1"
+      - "$mil:m2 e $centena:r1 e $unidade:r2"
+      - "$mil:m2 e $centena:r1 e $dezenaCompleta:r2"
+      - "$mil:m2 e $centena:r1 e $dezena:r2"
+      - "$mil:m2 e $centena:r1 e $dezena:r2 e $unidade:r3"
+
+      # "$unidade mil" (1000-9000), com resto
+      - "$unidade:m1 $mil:m2"
+      - "$unidade:m1 $mil:m2 e $unidade:r1"
+      - "$unidade:m1 $mil:m2 e $dezenaCompleta:r1"
+      - "$unidade:m1 $mil:m2 e $dezena:r1"
+      - "$unidade:m1 $mil:m2 e $dezena:r1 e $unidade:r2"
+      - "$unidade:m1 $mil:m2 e $centena:r1"
+      - "$unidade:m1 $mil:m2 e $centena:r1 e $unidade:r2"
+      - "$unidade:m1 $mil:m2 e $centena:r1 e $dezenaCompleta:r2"
+      - "$unidade:m1 $mil:m2 e $centena:r1 e $dezena:r2"
+      - "$unidade:m1 $mil:m2 e $centena:r1 e $dezena:r2 e $unidade:r3"
+
+      # "$dezenaCompleta mil" (10000-19000), com resto
+      - "$dezenaCompleta:m1 $mil:m2"
+      - "$dezenaCompleta:m1 $mil:m2 e $unidade:r1"
+      - "$dezenaCompleta:m1 $mil:m2 e $dezenaCompleta:r1"
+      - "$dezenaCompleta:m1 $mil:m2 e $dezena:r1"
+      - "$dezenaCompleta:m1 $mil:m2 e $dezena:r1 e $unidade:r2"
+      - "$dezenaCompleta:m1 $mil:m2 e $centena:r1"
+      - "$dezenaCompleta:m1 $mil:m2 e $centena:r1 e $unidade:r2"
+      - "$dezenaCompleta:m1 $mil:m2 e $centena:r1 e $dezenaCompleta:r2"
+      - "$dezenaCompleta:m1 $mil:m2 e $centena:r1 e $dezena:r2"
+      - "$dezenaCompleta:m1 $mil:m2 e $centena:r1 e $dezena:r2 e $unidade:r3"
+
+      # "$dezena mil" (20000-90000), com resto
+      - "$dezena:m1 $mil:m2"
+      - "$dezena:m1 $mil:m2 e $unidade:r1"
+      - "$dezena:m1 $mil:m2 e $dezenaCompleta:r1"
+      - "$dezena:m1 $mil:m2 e $dezena:r1"
+      - "$dezena:m1 $mil:m2 e $dezena:r1 e $unidade:r2"
+      - "$dezena:m1 $mil:m2 e $centena:r1"
+      - "$dezena:m1 $mil:m2 e $centena:r1 e $unidade:r2"
+      - "$dezena:m1 $mil:m2 e $centena:r1 e $dezenaCompleta:r2"
+      - "$dezena:m1 $mil:m2 e $centena:r1 e $dezena:r2"
+      - "$dezena:m1 $mil:m2 e $centena:r1 e $dezena:r2 e $unidade:r3"
+
+      # "$centena mil" (100000-900000), com resto — cobre o "cem mil e cinco" (100005) pedido
+      - "$centena:m1 $mil:m2"
+      - "$centena:m1 $mil:m2 e $unidade:r1"
+      - "$centena:m1 $mil:m2 e $dezenaCompleta:r1"
+      - "$centena:m1 $mil:m2 e $dezena:r1"
+      - "$centena:m1 $mil:m2 e $dezena:r1 e $unidade:r2"
+      - "$centena:m1 $mil:m2 e $centena:r1"
+      - "$centena:m1 $mil:m2 e $centena:r1 e $unidade:r2"
+      - "$centena:m1 $mil:m2 e $centena:r1 e $dezenaCompleta:r2"
+      - "$centena:m1 $mil:m2 e $centena:r1 e $dezena:r2"
+      - "$centena:m1 $mil:m2 e $centena:r1 e $dezena:r2 e $unidade:r3"
+
+  slots:
+
+    # 1-9. Zero não entra: nem quantidade (mínimo 1) nem check digit extenso (mínimo 10) o
+    # aceitam sozinho. "uma"/"duas" são a forma feminina que o app-wms já aceita
+    # (numberConversor.js, concordância com "unidade"/"caixa") — reconhecidas pelo motor nos
+    # dois projetos; se contam no AGV hoje depende de VocabularioDeVoz.VALOR_NUMERO aceitá-las
+    # (não aceita ainda, ver nota "Gap aberto" no topo do arquivo).
+    unidade:
+      - "um"
+      - "uma"
+      - "dois"
+      - "duas"
+      - "três"
+      - "quatro"
+      - "cinco"
+      - "seis"
+      - "sete"
+      - "oito"
+      - "nove"
+
+    # 10-19, palavras próprias (não compõem com unidade).
+    dezenaCompleta:
+      - "dez"
+      - "onze"
+      - "doze"
+      - "treze"
+      - "catorze"
+      - "quatorze"
+      - "quinze"
+      - "dezesseis"
+      - "dezessete"
+      - "dezoito"
+      - "dezenove"
+
+    # Múltiplos de dez, 20-90.
+    dezena:
+      - "vinte"
+      - "trinta"
+      - "quarenta"
+      - "cinquenta"
+      - "sessenta"
+      - "setenta"
+      - "oitenta"
+      - "noventa"
+
+    # Centenas exatas, 100-900. "cem"/"cento" são a mesma magnitude (100) em VocabularioDeVoz.
+    # VALOR_NUMERO — os dois entram porque numero() não distingue, só soma valores decrescentes.
+    # Só usado em numero_extenso: check digit nunca chega a três dígitos, mas falar uma centena
+    # em AguardandoCheckDigit é inofensivo (ver comentário de numero_extenso acima).
+    centena:
+      - "cem"
+      - "cento"
+      - "duzentos"
+      - "trezentos"
+      - "quatrocentos"
+      - "quinhentos"
+      - "seiscentos"
+      - "setecentos"
+      - "oitocentos"
+      - "novecentos"
+
+    # 0-9, COM "meia" (VocabularioDeVoz.VALOR_DIGITO — como se lê 6 em sequência de dígitos no
+    # Brasil). Usado em numero_digitos para os dois contextos; "meia" só é aceita de fato quando
+    # o app está esperando check digit — ver comentário de numero_digitos acima. "uma"/"duas"
+    # mesma origem app-wms do slot unidade — mapaDigitos de numberConversor.js aceita as duas
+    # formas também no modo dígito a dígito (concatenado), não só no modo soma.
+    digito:
+      - "zero"
+      - "um"
+      - "uma"
+      - "dois"
+      - "duas"
+      - "três"
+      - "quatro"
+      - "cinco"
+      - "seis"
+      - "meia"
+      - "sete"
+      - "oito"
+      - "nove"
+
+    # Marcador léxico de "mil" — um valor só, existe pra virar SLOT em vez de palavra literal.
+    # textoDosSlots só junta VALORES de slot (ordenados pelo nome da instância), nunca as
+    # palavras literais da expressão — é assim que "e" já é descartado hoje. "mil" não pode ser
+    # descartado do mesmo jeito: é o multiplicador, não um conectivo. Por isso vira $mil:m2 na
+    # expressão em vez de aparecer solto, e a instância "m2" foi escolhida pra ordenar depois de
+    # "m1" (o multiplicador antes de "mil") e antes de "r1" (o resto depois) — preserva a ordem
+    # "multiplicador, mil, resto" na reconstrução, que é o que um VocabularioDeVoz.numero()
+    # atualizado precisaria pra interpretar a multiplicação (ver pendência no design.md).
+    mil:
+      - "mil"
