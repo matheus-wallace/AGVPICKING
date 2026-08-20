@@ -9,6 +9,9 @@ import com.agvtronic.pickvoice.audio.AudioHfpOculos
 import com.agvtronic.pickvoice.audio.AudioMicrofoneSimulado
 import com.agvtronic.pickvoice.audio.FonteAudio
 import com.agvtronic.pickvoice.audio.MotorDeAsr
+// Importado só pelos links de KDoc acima de `motorDeAsr`: implementado, mas ainda sem contexto
+// `.rhn` e sem bancada — é o candidato da rodada atual (ver KDoc).
+import com.agvtronic.pickvoice.audio.MotorPicovoiceRhino
 // Importado só pelos links de KDoc acima de `motorDeAsr`: bancada de 18/08/2026 no TC21
 // derrubou a hipótese a favor dele (ver KDoc), volta a ser candidato numa próxima rodada.
 import com.agvtronic.pickvoice.audio.MotorSherpaOnnx
@@ -140,6 +143,20 @@ class AppContainer(private val appContext: Context) {
    * pt-BR (único tipo que suporta restrição por gramática) ou o Omnilingual ASR ganhe seletor de
    * idioma via API (`k2-fsa/sherpa-onnx#2812`, ainda em aberto). Ver `tasks.md` de
    * `add-sherpa-onnx-omnilingual-decoder`, seção 6, para o log real da bancada.
+   *
+   * **Existe uma terceira implementação desde `add-picovoice-asr-engine`:**
+   * [MotorPicovoiceRhino], fala-para-intenção de vocabulário fechado — categoria diferente das
+   * duas tentativas de fala-para-texto acima, e mais próxima do que faz o Vosk funcionar hoje
+   * (gramática fechada por estado). Trocar continua sendo esta linha e mais nenhuma:
+   * `MotorPicovoiceRhino(appContext, ajustesAsr)`.
+   *
+   * **O Rhino está pronto pra rodar, mas continua fora do padrão.** O contexto `.rhn` chegou do
+   * Console e foi vendorizado (tarefa 3.4, ver PROVENIENCIA.md de `assets/contexto-picovoice/`),
+   * a `AccessKey` vem de `local.properties` pelo `BuildConfig` e o modelo de idioma pt-BR também
+   * está vendorizado — nada falta pra `carregar()` conseguir `true`. O que falta é a bancada
+   * comparativa (grupo 6 de `add-picovoice-asr-engine`, exige o aparelho físico): até ela
+   * confirmar reconhecimento pt-BR utilizável, o motor de produção continua sendo [MotorVosk].
+   * Pra rodar a bancada, troque esta linha localmente e **não commite a troca** (tarefa 6.1).
    */
   val motorDeAsr: MotorDeAsr = MotorVosk(appContext, ajustesAsr)
 

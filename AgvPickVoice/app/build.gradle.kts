@@ -1,3 +1,4 @@
+import java.util.Properties
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
@@ -5,6 +6,20 @@ plugins {
   alias(libs.plugins.jetbrains.kotlin.android)
   alias(libs.plugins.compose.compiler)
 }
+
+/**
+ * `local.properties`, o mesmo arquivo que o `settings.gradle.kts` já lê para o `github_token`.
+ *
+ * Fica fora do controle de versão (`.gitignore`, linhas 4 e 11) e é onde mora a `AccessKey` do
+ * Picovoice Console — o primeiro segredo de terceiro deste projeto
+ * (add-picovoice-asr-engine - Decisão 3). O valor **nunca** é impresso: ele só atravessa daqui
+ * para o `buildConfigField` abaixo, e a única coisa que o log de build diz é se a chave existe.
+ */
+val propriedadesLocais =
+    Properties().apply {
+      val arquivo = rootProject.file("local.properties")
+      if (arquivo.exists()) arquivo.inputStream().use { load(it) }
+    }
 
 android {
   namespace = "com.agvtronic.pickvoice"
@@ -27,6 +42,18 @@ android {
     // Replace with real values from the Wearables Developer Center only for release builds.
     manifestPlaceholders["mwdat_application_id"] = ""
     manifestPlaceholders["mwdat_client_token"] = ""
+
+    // AccessKey do Picovoice Console, de `local.properties` para o BuildConfig
+    // (add-picovoice-asr-engine - Decisão 3). Ausente vira string vazia em vez de falhar o
+    // build: o Rhino é motor alternativo, não o ativo, e um clone sem a chave tem que
+    // continuar compilando — quem degrada é o `MotorPicovoiceRhino.carregar()`, devolvendo
+    // `false` como qualquer outra falha de motor.
+    val chaveDoPicovoice = propriedadesLocais.getProperty("picovoiceAccessKey").orEmpty()
+    buildConfigField("String", "PICOVOICE_ACCESS_KEY", "\"$chaveDoPicovoice\"")
+    // Só a presença, nunca o valor.
+    if (chaveDoPicovoice.isEmpty()) {
+      logger.info("picovoiceAccessKey ausente em local.properties; MotorPicovoiceRhino ficará desligado")
+    }
   }
 
   buildTypes {
@@ -71,6 +98,12 @@ dependencies {
   // no design.md do change. O JitPack tem builds da mesma tag, mas publica só os módulos de
   // JVM/desktop — não o AAR de Android.
   implementation(files("libs/sherpa-onnx-${libs.versions.sherpaOnnx.get()}.aar"))
+
+  // Picovoice Rhino — o terceiro MotorDeAsr, fala-para-intenção. Por coordenada Maven, ao
+  // contrário do sherpa-onnx: o artefato está publicado no Central. O contexto `.rhn` e o modelo
+  // de idioma pt-BR vivem em `src/main/assets/`, não vêm pela dependência — o `.aar` só embute o
+  // modelo de inglês.
+  implementation(libs.picovoice.rhino.android)
 
   // ML Kit bundled — passo 1 da cascata de decodificação (doc §6.3). O modelo é empacotado
   // no APK; nada é baixado em runtime, que é o que o §6.3 exige.
