@@ -11,10 +11,13 @@ package com.agvtronic.pickvoice.audio
  *   (add-voice-recognition-reliability - Decisão 2). Continua suportado porque a fatia de
  *   relato de ocorrência via LLM (doc §5.4) volta a precisar dele.
  * @property perfil quanto silêncio fecha a elocução neste estado (doc §5.1).
+ * @property contextoRhino qual contexto pré-carregado o Rhino usa. Outros motores ignoram este
+ *   campo e continuam usando [palavras] e [perfil].
  */
 data class ConfiguracaoDeEscuta(
     val palavras: List<String>,
     val perfil: PerfilEndpoint,
+    val contextoRhino: TipoContextoRhino = TipoContextoRhino.PRINCIPAL,
 ) {
 
   /** `true` quando o estado não tem gramática fechada — nenhum tem, hoje (ver [palavras]). */
@@ -40,4 +43,10 @@ data class ConfiguracaoDeEscuta(
             ) {
               "\"$it\""
             }
+}
+
+/** Contextos Rhino pré-carregados; a seleção efetiva ocorre somente na thread de áudio. */
+enum class TipoContextoRhino {
+  PRINCIPAL,
+  QUANTIDADE,
 }

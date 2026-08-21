@@ -19,18 +19,15 @@ import com.agvtronic.pickvoice.BuildConfig
  * texto e o resto do pipeline segue sem saber que o motor pensava em intenções
  * (add-picovoice-asr-engine - Decisão 1). Ver o KDoc daquele objeto para o porquê.
  *
- * ### Um contexto só, para o app inteiro
+ * ### Dois contextos pré-carregados
  *
- * Trocar de contexto no Rhino significa **destruir e recriar** a instância — `setContextPath` é
- * parâmetro de construção, não ajuste de runtime. Como [MotorDeAsr.carregar] existe justamente
- * para os segundos de carga acontecerem na subida do app e não na frente do operador, este motor
- * carrega **um** contexto cobrindo todo o vocabulário e o mantém pela vida do processo. A
- * restrição de "só este comando vale neste estado" continua acontecendo depois, no
- * [InterpretadorDeFala], como já acontece hoje (add-picovoice-asr-engine - Decisão 2).
+ * `setContextPath` é parâmetro de construção, então o motor constrói uma instância para comandos
+ * e outra para quantidades durante [carregar]. [ConfiguracaoDeEscuta.contextoRhino] escolhe qual
+ * delas recebe áudio; nunca se processa o mesmo quadro nas duas. A sessão e ambos os engines são
+ * manipulados somente pela thread `audio-asr` do [ReconhecedorDeComando].
  *
- * É por isso que [abrirSessao] ignora as [ConfiguracaoDeEscuta.palavras]: o vocabulário do estado
- * não escolhe contexto aqui. O parâmetro continua na assinatura porque a interface é a mesma para
- * os três motores.
+ * [abrirSessao] ignora [ConfiguracaoDeEscuta.palavras], porque o vocabulário já está compilado nos
+ * contextos; usa apenas [ConfiguracaoDeEscuta.contextoRhino] para escolher o engine.
  *
  * ### Três coisas que a verificação da API impôs a este código
  *
@@ -60,9 +57,9 @@ import com.agvtronic.pickvoice.BuildConfig
  *
  * ### Confinamento de thread
  *
- * A instância do `Rhino` segura ponteiro nativo e não é thread-safe, como `Model`/`Recognizer` do
- * Vosk e as sessões do ONNX Runtime. Tudo aqui roda na thread única de áudio do
- * [ReconhecedorDeComando]; nenhuma sincronização é necessária e nenhuma é feita.
+ * Cada instância do `Rhino` segura ponteiro nativo e não é thread-safe, como
+ * `Model`/`Recognizer` do Vosk e as sessões do ONNX Runtime. Tudo aqui roda na thread única de
+ * áudio do [ReconhecedorDeComando]; nenhuma sincronização é necessária e nenhuma é feita.
  *
  * @param appContext contexto de aplicação — o `Rhino` vive além de qualquer `Activity`, e o
  *   `Builder` precisa dele para extrair modelo e contexto de `assets/` para o armazenamento
@@ -77,11 +74,15 @@ class MotorPicovoiceRhino(
 
   override val nome: String = "picovoice-rhino"
 
-  /** Confinado na thread de áudio. Um ponteiro nativo, vivo pela vida do processo. */
-  private var rhino: Rhino? = null
+  /** Confinados na thread de áudio. Dois ponteiros nativos, vivos pela vida do processo. */
+  private var rhinoPrincipal: Rhino? = null
+  private var rhinoQuantidade: Rhino? = null
+
+  /** Último contexto que recebeu áudio; usado apenas para logar transições reais. */
+  private var contextoAtivo = TipoContextoRhino.PRINCIPAL
 
   /**
-   * Constrói a instância do `Rhino` com o contexto e o modelo pt-BR, uma vez.
+   * Constrói as duas instâncias do `Rhino` com o modelo pt-BR, uma vez.
    *
    * A `AccessKey` vem do `BuildConfig`, gerada a partir de `local.properties` no
    * `build.gradle.kts` (add-picovoice-asr-engine - Decisão 3). Ela **nunca** é logada: só a
@@ -89,7 +90,7 @@ class MotorPicovoiceRhino(
    * por falta de contexto são dois problemas diferentes de bancada.
    */
   override fun carregar(): Boolean {
-    if (rhino != null) return true
+    if (rhinoPrincipal != null && rhinoQuantidade != null) return true
 
     if (BuildConfig.PICOVOICE_ACCESS_KEY.isEmpty()) {
       Log.e(TAG, "picovoiceAccessKey ausente em local.properties; voz desligada")
@@ -97,49 +98,80 @@ class MotorPicovoiceRhino(
     }
 
     val inicio = System.currentTimeMillis()
-    rhino =
+    var principal: Rhino? = null
+    var quantidade: Rhino? = null
+
+    val carregou =
         runCatching {
-              Rhino.Builder()
-                  .setAccessKey(BuildConfig.PICOVOICE_ACCESS_KEY)
-                  // Sem esta linha o SDK usaria o `rhino_params.pv` de **inglês** que vem dentro
-                  // do .aar, e o motor rodaria no idioma errado sem reclamar de nada.
-                  .setModelPath(MODELO)
-                  .setContextPath(CONTEXTO)
-                  .setSensitivity(SENSIBILIDADE)
-                  .setEndpointDurationSec(duracaoDeEndpointSegundos())
-                  // O galpão tem fala de fundo, mas o operador fala sozinho no headset: exigir o
-                  // silêncio final é o que evita o motor concluir a intenção no meio da frase.
-                  // É também o default do SDK; explícito porque é decisão, não herança.
-                  .setRequireEndpoint(true)
-                  .build(appContext)
-            }
-            .onSuccess {
+              val novoPrincipal =
+                  construirRhino(CONTEXTO_PRINCIPAL, duracaoDeEndpointSegundos())
+              principal = novoPrincipal
+              val novaQuantidade = construirRhino(CONTEXTO_QUANTIDADE, ENDPOINT_QUANTIDADE_S)
+              quantidade = novaQuantidade
+              rhinoPrincipal = novoPrincipal
+              rhinoQuantidade = novaQuantidade
+
               Log.i(
                   TAG,
-                  "Rhino ${it.version} carregado em ${System.currentTimeMillis() - inicio}ms " +
-                      "(${it.sampleRate}Hz, quadro=${it.frameLength}, " +
-                      "endpoint=${duracaoDeEndpointSegundos()}s, " +
+                  "Rhino ${novoPrincipal.version} carregado em " +
+                      "${System.currentTimeMillis() - inicio}ms " +
+                      "(${novoPrincipal.sampleRate}Hz, quadro=${novoPrincipal.frameLength}, " +
+                      "contextos=[PRINCIPAL endpoint=${duracaoDeEndpointSegundos()}s, " +
+                      "QUANTIDADE endpoint=${ENDPOINT_QUANTIDADE_S}s], " +
                       "intenções=${SintetizadorDeIntencaoRhino.INTENCOES.keys})",
               )
             }
-            .onFailure { Log.e(TAG, "Falha ao carregar o Rhino; voz desligada", it) }
-            .getOrNull()
+            .onFailure { erro ->
+              principal?.delete()
+              quantidade?.delete()
+              rhinoPrincipal = null
+              rhinoQuantidade = null
+              Log.e(TAG, "Falha ao carregar os contextos Rhino; voz desligada", erro)
+            }
+            .isSuccess
 
-    return rhino != null
+    return carregou
   }
 
+  private fun construirRhino(caminhoDoContexto: String, endpointSegundos: Float): Rhino =
+      Rhino.Builder()
+          .setAccessKey(BuildConfig.PICOVOICE_ACCESS_KEY)
+          // Sem esta linha o SDK usaria o modelo inglês empacotado no .aar.
+          .setModelPath(MODELO)
+          .setContextPath(caminhoDoContexto)
+          .setSensitivity(SENSIBILIDADE)
+          .setEndpointDurationSec(endpointSegundos)
+          .setRequireEndpoint(true)
+          .build(appContext)
+
   /**
-   * Abre a escuta do estado. O `Rhino` é o mesmo sempre — o que nasce aqui é só o reamostrador e
-   * o acumulador de quadros, que são estado de fluxo e não podem atravessar a troca de estado.
-   *
-   * [configuracao] não escolhe contexto nem janela de endpoint (ver o KDoc da classe e
-   * [duracaoDeEndpointSegundos]); fica registrado como parâmetro não usado de propósito.
+   * Abre a escuta usando o engine pré-carregado pedido pelo estado. O chamador executa este
+   * método entre janelas, na thread de áudio, depois de fechar a sessão anterior.
    */
   override fun abrirSessao(configuracao: ConfiguracaoDeEscuta, sampleRate: Int): SessaoDeAsr? {
-    val carregado = rhino ?: return null
+    val contexto = configuracao.contextoRhino
+    val carregado =
+        when (contexto) {
+          TipoContextoRhino.PRINCIPAL -> rhinoPrincipal
+          TipoContextoRhino.QUANTIDADE -> rhinoQuantidade
+        } ?: return null
+
+    // O novo contexto começa sem qualquer inferência parcial anterior. Também limpa a sessão
+    // principal ao mudar apenas de estado dentro do mesmo contexto.
+    val reiniciado =
+        runCatching { carregado.reset() }
+            .onFailure { Log.e(TAG, "Falha ao iniciar RhinoContext=$contexto", it) }
+            .isSuccess
+    if (!reiniciado) return null
+
+    if (contexto != contextoAtivo) {
+      Log.i(TAG, "RhinoContext $contextoAtivo -> $contexto")
+      contextoAtivo = contexto
+    }
 
     return SessaoRhino(
         rhino = carregado,
+        contexto = contexto,
         reamostrador = ReamostradorLinear(sampleRate, carregado.sampleRate),
     )
   }
@@ -174,6 +206,7 @@ class MotorPicovoiceRhino(
    */
   private class SessaoRhino(
       private val rhino: Rhino,
+      private val contexto: TipoContextoRhino,
       private val reamostrador: ReamostradorLinear,
   ) : SessaoDeAsr {
 
@@ -232,31 +265,46 @@ class MotorPicovoiceRhino(
      * do primeiro resultado; o demo oficial em C, que escuta em loop como este app, chama
      * `pv_rhino_reset` logo depois de ler a intenção.
      */
-    private fun colherInferencia(): String =
-        runCatching {
-              val inferencia = rhino.inference
-              val texto =
-                  SintetizadorDeIntencaoRhino.sintetizar(
-                      entendido = inferencia.isUnderstood,
-                      intencao = inferencia.intent,
-                      slots = inferencia.slots,
-                  )
+    private fun colherInferencia(): String {
+      val texto =
+          runCatching {
+                val inferencia = rhino.inference
+                val quantidade =
+                    if (contexto == TipoContextoRhino.QUANTIDADE && inferencia.isUnderstood) {
+                      InterpretadorDeQuantidadeRhino.interpretar(inferencia.slots)
+                    } else null
+                val sintetizado =
+                    when (contexto) {
+                      TipoContextoRhino.PRINCIPAL ->
+                          SintetizadorDeIntencaoRhino.sintetizar(
+                              entendido = inferencia.isUnderstood,
+                              intencao = inferencia.intent,
+                              slots = inferencia.slots,
+                          )
+                      TipoContextoRhino.QUANTIDADE -> quantidade?.toString().orEmpty()
+                    }
 
-              // O bruto junto do sintetizado, no mesmo canal em que o ReconhecedorDeComando loga
-              // o desfecho: numa bancada só se distingue "o contexto não entendeu" de "entendeu e
-              // a síntese não virou comando" olhando as duas coisas na mesma linha.
-              Log.i(
-                  TAG,
-                  "Rhino: entendido=${inferencia.isUnderstood} " +
-                      "intent=\"${inferencia.intent.orEmpty()}\" " +
-                      "slots=${inferencia.slots} -> \"$texto\"",
-              )
+                val quantidadeLog =
+                    if (contexto == TipoContextoRhino.QUANTIDADE) {
+                      " quantidadeInterpretada=${quantidade ?: "null"}"
+                    } else ""
+                Log.i(
+                    TAG,
+                    "RhinoContext=$contexto understood=${inferencia.isUnderstood} " +
+                        "intent=${inferencia.intent.orEmpty()} slots=${inferencia.slots}" +
+                        quantidadeLog,
+                )
+                sintetizado
+              }
+              .onFailure {
+                Log.e(TAG, "Falha ao ler RhinoContext=$contexto; elocução descartada", it)
+              }
+              .getOrDefault("")
 
-              rhino.reset()
-              texto
-            }
-            .onFailure { Log.e(TAG, "Falha ao ler a inferência; elocução descartada", it) }
-            .getOrDefault("")
+      runCatching { rhino.reset() }
+          .onFailure { Log.e(TAG, "Falha ao reiniciar RhinoContext=$contexto", it) }
+      return texto
+    }
 
     override fun reiniciar() {
       runCatching { rhino.reset() }
@@ -295,13 +343,14 @@ class MotorPicovoiceRhino(
     const val MODELO = "modelo-picovoice-rhino/rhino_params_pt.pv"
 
     /**
-     * O contexto compilado no Picovoice Console — o vocabulário fechado deste projeto.
-     *
-     * **Ainda não existe** (ver PROVENIENCIA.md do diretório): é artefato binário que só sai do
-     * Console, na conta do Picovoice. Enquanto faltar, [carregar] devolve `false` e a voz fica
-     * desligada, como qualquer outra falha de motor.
+     * O contexto principal compilado no Picovoice Console — comandos, check digit e a gramática
+     * numérica original. Ele permanece inalterado para evitar regressões nos comandos.
      */
-    const val CONTEXTO = "contexto-picovoice/picovoice-pt.rhn"
+    const val CONTEXTO_PRINCIPAL = "contexto-picovoice/picovoice-pt.rhn"
+
+    /** Contexto dedicado aos slots `a1`, `b1` e `c1` de quantidades entre 1 e 9999. */
+    const val CONTEXTO_QUANTIDADE =
+        "contexto-picovoice/AGVTRONIC_pt_android_v4_0_0_Quantidade.rhn"
 
     /**
      * Sensibilidade da inferência, `[0, 1]`. Mais alta erra menos por omissão e mais por
@@ -314,6 +363,9 @@ class MotorPicovoiceRhino(
     const val ENDPOINT_MINIMO_S = 0.5f
 
     const val ENDPOINT_MAXIMO_S = 5.0f
+
+    /** Baseline solicitada para o contexto dedicado de quantidade. */
+    const val ENDPOINT_QUANTIDADE_S = 1.0f
 
     /** Os [AjustesAsr] falam em ms; o Rhino, em segundos. */
     const val MS_POR_SEGUNDO = 1_000f

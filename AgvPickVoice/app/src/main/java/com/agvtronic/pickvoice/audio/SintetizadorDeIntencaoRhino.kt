@@ -39,9 +39,9 @@ object SintetizadorDeIntencaoRhino {
   /**
    * Nome da intenção no contexto `.rhn` -> texto que o [InterpretadorDeFala] espera.
    *
-   * Só os comandos de **palavra única**. Check digit e quantidade não entram: eles chegam como
-   * intenção com slot, e quem vira texto é o valor do slot, não o nome da intenção (ver
-   * [sintetizar]).
+   * Só os comandos de **palavra única**. Check digit não entra: ele chega como intenção com slot,
+   * e quem vira texto é o valor do slot, não o nome da intenção (ver [sintetizar]). Quantidade é
+   * tratada separadamente por [sintetizarQuantidade].
    *
    * `linkedMapOf` pelo mesmo motivo do [VocabularioDeVoz]: a ordem de inserção é a ordem em que
    * as intenções aparecem no log de carga do motor, e uma lista legível no logcat é o que permite
@@ -89,7 +89,14 @@ object SintetizadorDeIntencaoRhino {
   }
 
   /**
-   * O texto de uma intenção com argumentos — check digit e quantidade, hoje.
+   * Converte a inferência do contexto de quantidade no texto numérico consumido pelo fluxo atual.
+   * Detalhes dos slots ficam nesta fronteira e não vazam para a máquina de estados.
+   */
+  fun sintetizarQuantidade(slots: Map<String, String>): String =
+      InterpretadorDeQuantidadeRhino.interpretar(slots)?.toString().orEmpty()
+
+  /**
+   * O texto de uma intenção com argumento do contexto principal — check digit, hoje.
    *
    * **O valor do slot é o texto inteiro, e o nome da intenção não entra.** Um check digit falado
    * vira `"47"` (ou `"quarenta e sete"`, dependendo de como o slot foi enumerado no Console), e

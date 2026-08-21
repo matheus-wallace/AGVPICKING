@@ -177,16 +177,17 @@ class InterpretadorDeFalaTest {
   }
 
   @Test
-  fun `quantidade recusa sequencia longa, magnitude repetida, zero e valor fora do intervalo`() {
+  fun `quantidade aceita ate 9999 e recusa magnitude repetida zero e valor fora do intervalo`() {
     val estado = PickingState.ConfirmandoQuantidade(item, 12)
 
-    // Acima de três algarismos passa do teto de 999 — não há leitura plausível.
-    assertNull(interpretar(estado, "um dois três quatro"))
+    // O contexto dedicado de quantidade cobre 1..9999 e entrega o valor já sintetizado assim.
+    assertEquals(quantidade(1234), interpretar(estado, "1234"))
+    assertEquals(quantidade(9999), interpretar(estado, "9999"))
     // Nem por extenso nem dígito a dígito: "trinta" não é algarismo, e a dupla não é decrescente.
     assertNull(interpretar(estado, "vinte trinta"))
     // Zero unidade não é coleta: é ruptura, e tem comando próprio.
     assertNull(interpretar(estado, "zero"))
-    assertNull(interpretar(estado, "1000"))
+    assertNull(interpretar(estado, "10000"))
     assertNull(interpretar(estado, ""))
   }
 

@@ -79,6 +79,7 @@ object SeletorDeEscuta {
             ConfiguracaoDeEscuta(
                 palavras = VocabularioDeVoz.QUANTIDADES + VocabularioDeVoz.TRANSVERSAIS,
                 perfil = PerfilEndpoint.DIGITOS,
+                contextoRhino = TipoContextoRhino.QUANTIDADE,
             )
 
         // "próximo" é sinônimo aditivo de "confirmar" aqui (design.md - Decisão 8): o passo só

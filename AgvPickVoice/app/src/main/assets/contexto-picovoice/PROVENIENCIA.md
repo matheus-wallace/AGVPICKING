@@ -15,6 +15,22 @@ Contexto (`.rhn`) do `MotorPicovoiceRhino` (change `add-picovoice-asr-engine`).
 | SHA-256 | `7f359f118186fd382cad94128e5d9bb90e87e34c50899702899368e1bc174bf2` |
 | Licença | Picovoice, termos em <https://picovoice.ai/docs/terms-of-use/> (`LICENSE.txt` do pacote de download, conta de trial — não redistribuível fora deste uso) |
 
+## Contexto dedicado de quantidade
+
+| | |
+|---|---|
+| Arquivo | `AGVTRONIC_pt_android_v4_0_0_Quantidade.rhn` |
+| Constante que o consome | `MotorPicovoiceRhino.CONTEXTO_QUANTIDADE` |
+| Origem | Picovoice Console, contexto dedicado a quantidades de 1 a 9999 |
+| Vendorizado em | 20/08/2026 |
+| Tamanho | 10.392 B |
+| SHA-256 | `f4f9cd88f6ff3a438573b781aafcc2758f978d1a7bac0613cf6973c70d5c81ab` |
+| Licença | `LICENSE.txt` deste diretório |
+
+O contexto dedicado devolve os slots `a1` (milhar), `b1` (centena) e `c1` (1..99 já
+normalizado). Ele só é selecionado em `PickingState.ConfirmandoQuantidade`; todos os demais
+estados continuam usando `picovoice-pt.rhn`.
+
 Um `.rhn` é artefato binário compilado pelo Console a partir do YAML de contexto, específico de
 idioma **e** de plataforma (o de Android não serve no de iOS).
 

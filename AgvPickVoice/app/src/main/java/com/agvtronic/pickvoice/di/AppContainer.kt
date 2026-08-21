@@ -9,8 +9,6 @@ import com.agvtronic.pickvoice.audio.AudioHfpOculos
 import com.agvtronic.pickvoice.audio.AudioMicrofoneSimulado
 import com.agvtronic.pickvoice.audio.FonteAudio
 import com.agvtronic.pickvoice.audio.MotorDeAsr
-// Importado só pelos links de KDoc acima de `motorDeAsr`: implementado, mas ainda sem contexto
-// `.rhn` e sem bancada — é o candidato da rodada atual (ver KDoc).
 import com.agvtronic.pickvoice.audio.MotorPicovoiceRhino
 // Importado só pelos links de KDoc acima de `motorDeAsr`: bancada de 18/08/2026 no TC21
 // derrubou a hipótese a favor dele (ver KDoc), volta a ser candidato numa próxima rodada.
@@ -123,10 +121,10 @@ class AppContainer(private val appContext: Context) {
    * Qual decodificador de fala roda, interface-tipado pelo mesmo motivo do [fonteAudio]: trocar
    * Vosk por sherpa-onnx é **esta linha e mais nenhuma** (add-sherpa-onnx-asr-engine - Decisão 1).
    *
-   * **As duas implementações existem.** A ativa é [MotorVosk] — a bancada de 18/08/2026 testou
-   * [MotorSherpaOnnx] no TC21 com `degradarCanal=false` (áudio cru a 16 kHz, sinal forte, pico
-   * ~-14 dBFS) e o Whisper-tiny, que era o decodificador dele na época, alucinou nos comandos
-   * curtos da gramática (`"iniciar"`/`"próximo"` saíram embutidos em texto extra, nunca
+   * [MotorVosk] e [MotorSherpaOnnx] permanecem disponíveis como alternativas. A bancada de
+   * 18/08/2026 testou o segundo no TC21 com `degradarCanal=false` (áudio cru a 16 kHz, sinal
+   * forte, pico ~-14 dBFS) e o Whisper-tiny, que era o decodificador dele na época, alucinou nos
+   * comandos curtos da gramática (`"iniciar"`/`"próximo"` saíram embutidos em texto extra, nunca
    * isolados). Não foi problema de ganho nem de canal degradado — as duas hipóteses foram
    * descartadas nessa mesma bancada.
    *
@@ -144,21 +142,15 @@ class AppContainer(private val appContext: Context) {
    * idioma via API (`k2-fsa/sherpa-onnx#2812`, ainda em aberto). Ver `tasks.md` de
    * `add-sherpa-onnx-omnilingual-decoder`, seção 6, para o log real da bancada.
    *
-   * **Existe uma terceira implementação desde `add-picovoice-asr-engine`:**
-   * [MotorPicovoiceRhino], fala-para-intenção de vocabulário fechado — categoria diferente das
+   * [MotorPicovoiceRhino] é fala-para-intenção de vocabulário fechado — categoria diferente das
    * duas tentativas de fala-para-texto acima, e mais próxima do que faz o Vosk funcionar hoje
-   * (gramática fechada por estado). Trocar continua sendo esta linha e mais nenhuma:
-   * `MotorPicovoiceRhino(appContext, ajustesAsr)`.
+   * (gramática fechada por estado).
    *
-   * **O Rhino está pronto pra rodar, mas continua fora do padrão.** O contexto `.rhn` chegou do
-   * Console e foi vendorizado (tarefa 3.4, ver PROVENIENCIA.md de `assets/contexto-picovoice/`),
-   * a `AccessKey` vem de `local.properties` pelo `BuildConfig` e o modelo de idioma pt-BR também
-   * está vendorizado — nada falta pra `carregar()` conseguir `true`. O que falta é a bancada
-   * comparativa (grupo 6 de `add-picovoice-asr-engine`, exige o aparelho físico): até ela
-   * confirmar reconhecimento pt-BR utilizável, o motor de produção continua sendo [MotorVosk].
-   * Pra rodar a bancada, troque esta linha localmente e **não commite a troca** (tarefa 6.1).
+   * **O Rhino é o motor ativo.** O contexto principal preserva comandos/check digit e o contexto
+   * dedicado reconhece quantidades de 1 a 9999. Ambos são carregados na subida; o estado de
+   * picking seleciona qual recebe áudio sem reconstruir engines durante a operação.
    */
-  val motorDeAsr: MotorDeAsr = MotorVosk(appContext, ajustesAsr)
+  val motorDeAsr: MotorDeAsr = MotorPicovoiceRhino(appContext, ajustesAsr)
 
   /** Saída substituível: TTS local nesta fatia, Piper/HFP quando essa rota existir. */
   val saidaDeAudio: SaidaDeAudio = SaidaTextToSpeechAndroid(appContext)

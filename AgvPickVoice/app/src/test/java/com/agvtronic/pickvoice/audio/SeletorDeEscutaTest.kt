@@ -64,6 +64,15 @@ class SeletorDeEscutaTest {
   }
 
   @Test
+  fun `somente confirmando quantidade seleciona o contexto Rhino de quantidade`() {
+    val quantidade = SeletorDeEscuta.para(PickingState.ConfirmandoQuantidade(item, 12))
+    val principal = SeletorDeEscuta.para(PickingState.ReadbackQuantidade(item, 12))
+
+    assertEquals(TipoContextoRhino.QUANTIDADE, quantidade?.contextoRhino)
+    assertEquals(TipoContextoRhino.PRINCIPAL, principal?.contextoRhino)
+  }
+
+  @Test
   fun `comandos de uma palavra usam o perfil curto e aceitam os transversais`() {
     val estados =
         mapOf(

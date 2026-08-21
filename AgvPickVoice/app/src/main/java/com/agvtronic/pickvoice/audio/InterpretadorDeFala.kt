@@ -25,7 +25,7 @@ object InterpretadorDeFala {
    *
    * O piso é 1: "zero unidades" não é uma coleta, é uma ruptura, e tem comando próprio.
    */
-  private val QUANTIDADE_ACEITA = 1..999
+  private val QUANTIDADE_ACEITA = 1..9_999
 
   fun interpretar(estado: PickingState, texto: String): IntencaoDeVoz? {
     val normalizado = texto.trim().lowercase()
