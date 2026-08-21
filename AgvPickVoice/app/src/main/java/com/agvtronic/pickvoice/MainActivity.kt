@@ -19,6 +19,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.agvtronic.pickvoice.ui.devpanel.DevPanelViewModel
+import com.agvtronic.pickvoice.ui.debugsettings.ConfiguracoesDebugScreen
 import com.agvtronic.pickvoice.ui.mirror.MiniaturaDeCamera
 import com.agvtronic.pickvoice.ui.mirror.MirrorScreen
 import com.agvtronic.pickvoice.ui.mirror.MirrorViewModel
@@ -138,6 +139,12 @@ class MainActivity : ComponentActivity() {
                       viewModel = mirrorViewModel,
                       devPanelViewModel = devPanelViewModel,
                       aoVoltarParaOperacao = { superficie = Superficie.OPERACAO },
+                      aoAbrirConfiguracoes = { superficie = Superficie.CONFIGURACOES_DEBUG },
+                  )
+              Superficie.CONFIGURACOES_DEBUG ->
+                  ConfiguracoesDebugScreen(
+                      repositorio = container.repositorioConfiguracoesDebug,
+                      aoVoltar = { superficie = Superficie.DEBUG },
                   )
             }
 
@@ -209,4 +216,7 @@ private enum class Superficie {
 
   /** A prévia espelho com o painel de eventos, para bancada e diagnóstico. */
   DEBUG,
+
+  /** Configura o hardware e os pipelines da próxima execução sem editar o código. */
+  CONFIGURACOES_DEBUG,
 }

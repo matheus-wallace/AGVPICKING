@@ -29,7 +29,11 @@ import com.meta.wearable.dat.mockdevice.api.camera.CameraFacing
  *
  * Idempotente: chamar de novo com o kit já habilitado não pareia um segundo dispositivo.
  */
-fun prepararDispositivoSimulado(context: Context) {
+fun prepararDispositivoSimulado(context: Context, habilitado: Boolean) {
+  if (!habilitado) {
+    Log.d(TAG, "MockDeviceKit desabilitado pela configuração de bancada")
+    return
+  }
   val mockDeviceKit = MockDeviceKit.getInstance(context)
 
   if (mockDeviceKit.isEnabled) {

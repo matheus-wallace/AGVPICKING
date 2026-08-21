@@ -31,12 +31,16 @@ fun MirrorScreen(
     devPanelViewModel: DevPanelViewModel,
     modifier: Modifier = Modifier,
     aoVoltarParaOperacao: (() -> Unit)? = null,
+    aoAbrirConfiguracoes: (() -> Unit)? = null,
 ) {
   val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
   DevPanelScreen(viewModel = devPanelViewModel, modifier = modifier) {
     if (aoVoltarParaOperacao != null) {
       TextButton(onClick = aoVoltarParaOperacao) { Text("Voltar à operação") }
+    }
+    if (aoAbrirConfiguracoes != null) {
+      TextButton(onClick = aoAbrirConfiguracoes) { Text("Configuração de bancada") }
     }
     PreviewCard(uiState = uiState)
     Spacer(Modifier.height(12.dp))

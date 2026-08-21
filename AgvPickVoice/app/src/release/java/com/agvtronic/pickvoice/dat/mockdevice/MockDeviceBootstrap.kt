@@ -14,6 +14,6 @@ import android.content.Context
  * então nenhum símbolo dela pode ser referenciado a partir daqui.
  */
 @Suppress("UNUSED_PARAMETER")
-fun prepararDispositivoSimulado(context: Context) {
+fun prepararDispositivoSimulado(context: Context, habilitado: Boolean) {
   // Intencionalmente vazio — ver KDoc.
 }

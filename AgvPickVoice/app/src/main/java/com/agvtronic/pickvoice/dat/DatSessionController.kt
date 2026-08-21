@@ -45,6 +45,7 @@ class DatSessionController(
     private val appContext: Context,
     private val actor: PickingActor,
     private val scope: CoroutineScope,
+    private val usarOculosSimulado: Boolean,
 ) {
 
   /**
@@ -115,7 +116,7 @@ class DatSessionController(
 
     // No-op em release. Em debug, deixa um óculos simulado pareado e vestido antes de
     // qualquer coisa — sem ele o AutoDeviceSelector não teria o que selecionar.
-    prepararDispositivoSimulado(appContext)
+    prepararDispositivoSimulado(appContext, usarOculosSimulado)
 
     actor.send(PickingEvent.RegistroIniciado)
 

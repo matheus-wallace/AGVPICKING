@@ -21,6 +21,8 @@ import com.agvtronic.pickvoice.audio.output.ControladorDeFala
 import com.agvtronic.pickvoice.audio.output.SaidaDeAudio
 import com.agvtronic.pickvoice.audio.output.SaidaTextToSpeechAndroid
 import com.agvtronic.pickvoice.dat.DatSessionController
+import com.agvtronic.pickvoice.debug.MotorAsrSelecionado
+import com.agvtronic.pickvoice.debug.RepositorioConfiguracoesDeDebug
 import com.agvtronic.pickvoice.data.PickingRepository
 import com.agvtronic.pickvoice.data.mock.MockPickingRepository
 import com.agvtronic.pickvoice.domain.statemachine.PickingActor
@@ -40,6 +42,10 @@ import java.io.File
  * concrete implementation once, expose it through an interface-typed val.
  */
 class AppContainer(private val appContext: Context) {
+
+  /** Configuração escolhida na tela de bancada antes deste processo ser iniciado. */
+  val repositorioConfiguracoesDebug = RepositorioConfiguracoesDeDebug(appContext)
+  private val configuracoesDebug = repositorioConfiguracoesDebug.carregar()
 
   /**
    * Escopo de vida do processo, dono da corrotina consumidora do [pickingActor].
@@ -88,7 +94,12 @@ class AppContainer(private val appContext: Context) {
    * `MainActivity`, depois de resolver as permissões Android.
    */
   val datSessionController: DatSessionController =
-      DatSessionController(appContext, pickingActor, datScope)
+      DatSessionController(
+          appContext,
+          pickingActor,
+          datScope,
+          usarOculosSimulado = configuracoesDebug.usarOculosSimulado,
+      )
 
   /**
    * Calibração do pipeline de voz, lida uma vez e compartilhada pelas duas peças de áudio.
@@ -115,7 +126,9 @@ class AppContainer(private val appContext: Context) {
    * Nada mais muda aqui — cada implementação declara a própria taxa de amostragem, e é dela
    * que o [reconhecedorDeComando] parte.
    */
-  val fonteAudio: FonteAudio = AudioMicrofoneSimulado(ajustesAsr)
+  val fonteAudio: FonteAudio =
+      if (configuracoesDebug.usarMicrofoneDoOculos) AudioHfpOculos(appContext)
+      else AudioMicrofoneSimulado(ajustesAsr)
 
   /**
    * Qual decodificador de fala roda, interface-tipado pelo mesmo motivo do [fonteAudio]: trocar
@@ -150,7 +163,12 @@ class AppContainer(private val appContext: Context) {
    * dedicado reconhece quantidades de 1 a 9999. Ambos são carregados na subida; o estado de
    * picking seleciona qual recebe áudio sem reconstruir engines durante a operação.
    */
-  val motorDeAsr: MotorDeAsr = MotorPicovoiceRhino(appContext, ajustesAsr)
+  val motorDeAsr: MotorDeAsr =
+      when (configuracoesDebug.motorAsr) {
+        MotorAsrSelecionado.RHINO -> MotorPicovoiceRhino(appContext, ajustesAsr)
+        MotorAsrSelecionado.VOSK -> MotorVosk(appContext, ajustesAsr)
+        MotorAsrSelecionado.SHERPA -> MotorSherpaOnnx(appContext, ajustesAsr)
+      }
 
   /** Saída substituível: TTS local nesta fatia, Piper/HFP quando essa rota existir. */
   val saidaDeAudio: SaidaDeAudio = SaidaTextToSpeechAndroid(appContext)
@@ -194,7 +212,8 @@ class AppContainer(private val appContext: Context) {
       )
 
   /** Calibração do pipeline de visão (recorte, resolução, taxa de quadros), lida uma vez. */
-  private val ajustesVisao: AjustesVisao = AjustesVisao.carregar(appContext)
+  private val ajustesVisao: AjustesVisao =
+      configuracoesDebug.aplicarEm(AjustesVisao.carregar(appContext))
 
   /**
    * Escopo do controlador de visão, em [Dispatchers.Main] pelo mesmo motivo do [datScope]: quem
