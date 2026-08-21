@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="980" viewBox="0 0 1600 980" role="img" aria-labelledby="title desc">
+  <title id="title">Arquitetura do AGV Pick Voice</title>
+  <desc id="desc">Os óculos Meta enviam vídeo ao aplicativo Android; voz, visão e dados mockados alimentam uma máquina de estados, que reproduz instruções por áudio. Verificação assistida é opcional.</desc>
+  <defs>
+    <style>
+      .bg{fill:#07111f}.group{fill:#0d2038;stroke:#38bdf8;stroke-width:2}.node{fill:#142d4a;stroke:#7dd3fc;stroke-width:2}.optional{fill:#2a2145;stroke:#c4b5fd;stroke-width:2}.t{font-family:Arial,sans-serif;fill:#e0f2fe;text-anchor:middle}.h{font-size:27px;font-weight:bold}.s{font-size:20px}.a{stroke:#7dd3fc;stroke-width:3;fill:none;marker-end:url(#arrow)}.d{stroke:#c4b5fd;stroke-width:3;fill:none;stroke-dasharray:10 8;marker-end:url(#arrowPurple)}
+    </style>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#7dd3fc"/></marker>
+    <marker id="arrowPurple" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#c4b5fd"/></marker>
+  </defs>
+  <rect class="bg" width="1600" height="980"/>
+  <text class="t h" x="800" y="52">AGV Pick Voice — Arquitetura do protótipo</text>
+  <rect class="group" x="55" y="110" width="310" height="710" rx="22"/><text class="t h" x="210" y="155">Óculos Meta</text>
+  <rect class="node" x="95" y="220" width="230" height="95" rx="14"/><text class="t h" x="210" y="260">Câmera</text><text class="t s" x="210" y="290">stream / foto</text>
+  <rect class="node" x="95" y="490" width="230" height="95" rx="14"/><text class="t h" x="210" y="530">Open-ear</text><text class="t s" x="210" y="560">saída de áudio</text>
+  <rect class="group" x="430" y="110" width="780" height="710" rx="22"/><text class="t h" x="820" y="155">Aplicativo Android Kotlin</text>
+  <rect class="node" x="480" y="205" width="220" height="100" rx="14"/><text class="t h" x="590" y="247">DAT</text><text class="t s" x="590" y="275">sessão e permissões</text>
+  <rect class="node" x="780" y="205" width="280" height="100" rx="14"/><text class="t h" x="920" y="242">Visão local</text><text class="t s" x="920" y="271">HEVC → recorte → ML Kit</text>
+  <rect class="node" x="465" y="350" width="250" height="110" rx="14"/><text class="t h" x="590" y="390">ASR local</text><text class="t s" x="590" y="420">Rhino principal</text><text class="t s" x="590" y="445">Vosk alternativo</text>
+  <rect class="node" x="465" y="500" width="250" height="90" rx="14"/><text class="t h" x="590" y="537">Configurações</text><text class="t s" x="590" y="567">ASR e câmera</text>
+  <rect class="node" x="790" y="390" width="300" height="130" rx="14"/><text class="t h" x="940" y="430">PickingActor</text><text class="t s" x="940" y="460">máquina de estados</text><text class="t s" x="940" y="488">única origem de transições</text>
+  <rect class="node" x="480" y="620" width="230" height="100" rx="14"/><text class="t h" x="595" y="660">Dados mockados</text><text class="t s" x="595" y="690">ordem e referência local</text>
+  <rect class="node" x="860" y="620" width="230" height="100" rx="14"/><text class="t h" x="975" y="660">TTS local</text><text class="t s" x="975" y="690">Android pt-BR</text>
+  <rect class="optional" x="1280" y="350" width="260" height="170" rx="18"/><text class="t h" x="1410" y="398">Exceção opcional</text><text class="t s" x="1410" y="435">verificação assistida</text><text class="t s" x="1410" y="465">rede só após falha</text>
+  <path class="a" d="M325 267 H480"/><path class="a" d="M700 255 H780"/><path class="a" d="M920 305 V390"/><path class="a" d="M715 405 H790"/><path class="a" d="M710 670 H790 V520"/><path class="a" d="M940 520 V620"/><path class="a" d="M975 720 V770 H325 V585"/>
+  <path class="d" d="M715 545 H750 V405 H790"/><path class="d" d="M715 545 H750 V255 H780"/>
+  <path class="d" d="M1060 255 H1160 V435 H1280"/><path class="d" d="M1280 480 H1160 V500 H1090"/>
+  <text class="t s" x="1310" y="830">Processamento local no smartphone • câmera sob demanda • sem WMS no protótipo</text>
+</svg>
